@@ -30,23 +30,29 @@ Three specialized agents run in parallel to analyze different aspects of code:
 
 ```
 agentic-code-optimization/
-├── .gitignore
+├── agents/                      # Agent framework
+│   ├── base.py                 # BaseAgent abstract class
+│   ├── examples.py             # Example agents and tools
+│   └── __init__.py
+├── providers/                   # LLM provider implementations
+│   ├── base.py                 # BaseProvider abstract class
+│   ├── registry.py             # ProviderRegistry (factory pattern)
+│   ├── ollama.py               # Ollama local provider
+│   ├── openai.py               # OpenAI provider
+│   ├── anthropic.py            # Anthropic Claude provider
+│   └── __init__.py
+├── config/                      # Configuration system
+│   ├── base.py                 # SubSectionParser ABC
+│   ├── parser.py               # ConfigParser singleton
+│   ├── providers.py            # Provider configurations
+│   └── __init__.py
+├── tests/                       # Unit and integration tests
+├── config.ini                   # Configuration file
+├── CLAUDE.md                    # Claude Code guidance
 ├── README.md
 ├── requirements.txt
 ├── pyproject.toml
-│
-├── src/agentic_optimizer/
-│   ├── core/                    # Base classes & state management
-│   ├── providers/               # LLM provider implementations
-│   ├── repository/              # Code storage and retrieval
-│   ├── agents/                  # Agent implementations
-│   ├── workflows/               # LangGraph workflows
-│   ├── prompts/                 # Agent prompts
-│   └── utils/                   # Utilities and helpers
-│
-├── tests/                       # Unit and integration tests
-├── examples/                    # Usage examples
-└── config/                      # Configuration files
+└── .gitignore
 ```
 
 ## Quick Start
@@ -71,83 +77,119 @@ pip install -e .
 
 ### Setup
 
-1. **Configure Ollama** (default provider):
+1. **Configure Provider** - Edit `config.ini`:
+   ```ini
+   [ollama]
+   base_url = http://localhost:11434
+   model = llama2:7b
+
+   [openai]
+   api_key = your-key-here
+   model = gpt-4
+
+   [anthropic]
+   api_key = your-key-here
+   model = claude-3-5-sonnet-20241022
+   ```
+
+2. **(Optional) Use Ollama locally**:
    ```bash
    # Install Ollama from https://ollama.ai
-   # Run Ollama and pull a model:
    ollama pull llama2:7b
-   ```
-
-2. **Create .env file**:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. **Edit .env** for your settings:
-   ```env
-   DEFAULT_PROVIDER=ollama
-   OLLAMA_BASE_URL=http://localhost:11434
-   OLLAMA_MODEL=llama2:7b
    ```
 
 ### Usage
 
 ```python
-from agentic_optimizer import OptimizationOrchestrator
-from agentic_optimizer.providers import ProviderFactory, LLMConfig
+from agents.examples import CodeAnalysisAgent
+from config.parser import ConfigParser
 
-# Create provider (Ollama, OpenAI, or Anthropic)
-config = LLMConfig(model_name="llama2:7b", temperature=0.7)
-provider = ProviderFactory.create("ollama", config)
+# Load configuration
+ConfigParser.load()
 
-# Initialize orchestrator
-orchestrator = OptimizationOrchestrator(provider)
+# Create agent (loads config from config.ini automatically)
+agent = CodeAnalysisAgent()
 
-# Optimize code
-result = await orchestrator.optimize(
-    source_code="""
+# Execute with code to analyze
+result = await agent.execute(
+    code="""
 def fibonacci(n):
     if n <= 1:
         return n
     return fibonacci(n-1) + fibonacci(n-2)
 """,
-    language="python",
-    optimization_types=["performance", "quality"]
+    user_input="Analyze this code"
 )
 
-print(result.optimized_code)
-print(result.optimization_suggestions)
+# Access results
+print(result["code_analysis"])
+print(agent.state.to_dict())
 ```
 
 ## Configuration
 
-### Environment Variables (.env)
+### config.ini Structure
 
-```env
-# Provider Selection
-DEFAULT_PROVIDER=ollama              # ollama, openai, anthropic
-FALLBACK_PROVIDER=openai             # Fallback if primary fails
+Configuration is loaded from `config.ini` using the `SubSectionParser` pattern:
 
-# Ollama Configuration
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2:7b
-OLLAMA_TIMEOUT=300
+```ini
+[ollama]
+base_url = http://localhost:11434
+model = llama2:7b
+temperature = 0.7
+max_tokens = 4096
+timeout = 60
+keep_alive = 5m
 
-# OpenAI Configuration (optional)
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4
+[openai]
+api_key = your-api-key
+model = gpt-4
+temperature = 0.7
+max_tokens = 4096
+timeout = 60
+organization_id =
 
-# Anthropic Configuration (optional)
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+[anthropic]
+api_key = your-api-key
+model = claude-3-5-sonnet-20241022
+temperature = 0.7
+max_tokens = 4096
+timeout = 60
+```
 
-# General Settings
-LOG_LEVEL=INFO
-MAX_RETRIES=3
-TIMEOUT=300
+### Loading Configuration
+
+```python
+from config.parser import ConfigParser
+from config.providers import OllamaConfig
+
+# Load configuration (auto-loads from project root config.ini)
+ConfigParser.load()
+
+# Get provider config
+ollama_config = ConfigParser.get(OllamaConfig)
+print(ollama_config.model)  # llama2:7b
 ```
 
 ## Development
+
+### Code Quality
+
+```bash
+# Format code
+black agents/ providers/ config/ tests/
+
+# Lint
+ruff check agents/ providers/ config/ tests/
+
+# Type check
+mypy agents/ providers/ config/ tests/
+
+# All checks
+black agents/ providers/ config/ tests/ && \
+  ruff check agents/ providers/ config/ tests/ && \
+  mypy agents/ providers/ config/ tests/
+```
 
 ### Running Tests
 
@@ -155,64 +197,114 @@ TIMEOUT=300
 # Run all tests
 pytest tests/
 
-# Run with coverage
-pytest tests/ --cov=src/agentic_optimizer
-```
+# Run specific test
+pytest tests/test_base_agent.py::TestAgentCreation -v
 
-### Code Formatting & Linting
+# With coverage
+pytest tests/ --cov=agents --cov=providers --cov=config
 
-```bash
-# Format code
-black src/ tests/
-
-# Check code quality
-ruff check src/ tests/
-
-# Type checking
-mypy src/
+# Watch mode (requires pytest-watch)
+ptw tests/
 ```
 
 ## Extending the System
 
-### Adding a Custom Agent
+### Creating a Custom Agent
+
+Agents use a **declarative pattern** with class attributes:
 
 ```python
-from agentic_optimizer.core import BaseAgent, AgentContext
+from agents.base import BaseAgent
+from langchain_core.tools import tool
 
-class CustomAnalysisAgent(BaseAgent):
-    def get_agent_name(self) -> str:
-        return "custom_analysis_agent"
+# Define tools
+@tool
+async def analyze_complexity(code: str) -> str:
+    """Analyze code complexity."""
+    return f"Complexity analysis for {len(code)} chars"
 
-    def validate_input(self, context: AgentContext) -> bool:
-        return context.state.get("source_code") is not None
+# Define agent
+class MyAnalysisAgent(BaseAgent):
+    prompt = """You are an expert code analyzer.
 
-    async def execute(self, context: AgentContext) -> dict:
-        code = context.state["source_code"]
-        # Your analysis logic here
-        return {
-            "custom_analysis": "Your analysis results"
-        }
+    Analyze code structure and complexity."""
+
+    tools = [analyze_complexity]
+
+    return_state_field = "my_analysis"
+
+    # Optional overrides
+    max_iterations = 8
+    temperature = 0.3
+    provider_name = "anthropic"
+
+# Use the agent
+agent = MyAnalysisAgent()
+result = await agent.execute(code="...", user_input="Analyze this")
+print(result["my_analysis"])
 ```
 
-### Adding a Custom Provider
+**Key Agent Attributes:**
+- `prompt` - System prompt (required, non-empty string)
+- `tools` - List of tools available to agent (required, list of callables)
+- `return_state_field` - State field to store results (required, valid Python identifier)
+- `max_iterations` - Max agentic loop iterations (default: 10)
+- `temperature` - LLM temperature (default: 0.7)
+- `provider_name` - Which provider to use (default: "ollama")
+
+### Creating a Custom Provider
 
 ```python
-from agentic_optimizer.providers import BaseLLMProvider, ProviderFactory, LLMConfig
+from providers.base import BaseProvider, ProviderResponse
+from providers.registry import ProviderRegistry
+from config.base import SubSectionParser
+from dataclasses import dataclass
 
-class CustomProvider(BaseLLMProvider):
-    async def generate(self, system_prompt: str, user_prompt: str, **kwargs):
-        # Your implementation
-        pass
+# 1. Define config
+@dataclass
+class CustomConfig(SubSectionParser):
+    SECTION = "custom"
+    api_url: str
+    api_key: str
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    timeout: int = 60
+
+# 2. Implement provider
+class CustomProvider(BaseProvider):
+    def __init__(self, config: CustomConfig):
+        self.config = config
+
+    async def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> ProviderResponse:
+        # Call your API
+        response = await self._call_api(system_prompt, user_prompt)
+
+        return ProviderResponse(
+            content=response["output"],
+            model=self.config.model,
+            usage={"tokens": response.get("tokens", 0)}
+        )
 
     async def validate_connection(self) -> bool:
-        # Check connection
-        return True
+        # Test connection
+        try:
+            # Test call
+            return True
+        except:
+            return False
 
     def get_provider_name(self) -> str:
-        return "custom_provider"
+        return "custom"
 
-# Register the provider
-ProviderFactory.register_provider("custom", CustomProvider)
+# 3. Register provider
+ProviderRegistry.register("custom", CustomProvider, CustomConfig)
+
+# 4. Add to config.ini
+# [custom]
+# api_url = https://api.example.com
+# api_key = your-key
+# model = your-model
 ```
 
 ## Workflow Execution
@@ -256,35 +348,62 @@ ProviderFactory.register_provider("custom", CustomProvider)
 
 ## Design Patterns
 
-### Provider Factory Pattern
-Seamlessly switch between LLM providers without changing agent code:
+### Declarative Agent Pattern
+Define agents using class attributes instead of method overrides:
 ```python
-# Switch providers at runtime
-provider = ProviderFactory.create("ollama", config)   # Local
-provider = ProviderFactory.create("openai", config)   # Cloud
-provider = ProviderFactory.create("anthropic", config) # Claude
+class MyAgent(BaseAgent):
+    prompt = "..."           # System prompt
+    tools = [...]            # Available tools
+    return_state_field = "..." # Result field name
 ```
 
-### Agent Base Class
-All agents inherit from `BaseAgent` with consistent interface:
-- `execute(context)` - Main agent logic
-- `validate_input(context)` - Input validation
-- `get_agent_name()` - Unique identifier
-- Automatic metrics collection
+### Provider Registry Pattern
+Dynamically create and manage providers:
+```python
+from providers.registry import ProviderRegistry
+
+# Create from config
+provider = ProviderRegistry.create("ollama")
+
+# Register custom provider
+ProviderRegistry.register("custom", CustomProvider)
+
+# Validate connection
+is_valid = await ProviderRegistry.validate_provider("openai")
+
+# List available
+available = ProviderRegistry.get_available()
+```
+
+### Configuration Pattern
+Dataclass-based configuration with INI mapping:
+```python
+from config.parser import ConfigParser
+from config.providers import OllamaConfig
+
+ConfigParser.load()
+config = ConfigParser.get(OllamaConfig)
+```
+
+### Agentic Loop
+Continuous refinement pattern: Think → Tool Use → Observe
+```
+1. Think: LLM processes context with available tools
+2. Tool Use: LLM calls tools in JSON format
+3. Observe: Tool results fed back to LLM
+4. Repeat: Until task_complete or max_iterations
+```
 
 ### State Management
-LangGraph state flows through the workflow:
+Agent state is LangGraph-compatible:
 ```python
-OptimizationState = {
-    "source_code": str,
-    "language": str,
-    "environment_summary": str,
-    "behavior_summary": str,
-    "component_summary": str,
-    "analysis_results": dict,
-    "optimized_code": str,
-    "optimization_suggestions": list
-}
+@dataclass
+class AgentState:
+    messages: list           # Conversation history
+    tool_results: list      # Tool execution results
+    final_result: str       # Agent output
+    iteration_count: int    # Loop iterations
+    status: AgentStatus     # IDLE, THINKING, USING_TOOL, etc.
 ```
 
 ## Supported Languages
@@ -335,12 +454,22 @@ Contributions are welcome! Please:
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Support
+## Status & Next Steps
 
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check existing documentation
-- Review examples in the `examples/` directory
+**Currently Implemented:**
+- ✅ Agent framework with declarative pattern
+- ✅ Provider abstraction (Ollama, OpenAI, Anthropic)
+- ✅ Configuration system (INI-based)
+- ✅ Agentic loop implementation
+- ✅ Tool binding and execution
+
+**Next Implementation Phase:**
+- [ ] Specialized agents (Environment, Behavior, Component Summary)
+- [ ] Code analysis tools
+- [ ] Repository storage system
+- [ ] LangGraph workflow integration
+- [ ] Comprehensive test suite
+- [ ] Documentation and examples
 
 ## Acknowledgments
 
