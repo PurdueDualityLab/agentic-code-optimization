@@ -21,8 +21,8 @@ from enum import Enum
 from typing import Any, Callable, Optional, Type
 
 from langchain_core.tools import BaseTool
-from langgraph.types import ReturnValueExecution
 
+from config.agents import AgentConfig
 from config.parser import ConfigParser
 from config.providers import BaseProviderConfig
 from providers.base import BaseProvider
@@ -98,40 +98,57 @@ class BaseAgent(ABC):
     """Abstract base class for declarative agents in the code optimization system.
 
     This class implements a declarative pattern where child classes define their
-    behavior through class-level attributes:
-        - prompt: str - System prompt for the agent
-        - tools: list[BaseTool] - Tools available to the agent
-        - return_state_field: str - Name of field to return in LangGraph state
-        - provider_name: str - Provider to use (default: from config)
-        - max_iterations: int - Maximum agentic loop iterations
-        - temperature: float - LLM temperature (default: from config)
+    behavior through class-level attributes. Agent configuration is loaded from
+    config.ini [agents] section, allowing class attributes to override config values.
 
-    The __new__ method processes these declarative attributes and binds tools
-    to the agent instance.
+    Class-level attributes (all public, no underscore prefix):
+        - prompt: str - System prompt for the agent (required)
+        - tools: list[BaseTool] - Tools available to the agent (required)
+        - return_state_field: str - Name of field to return in LangGraph state (required)
+        - provider_name: str - Provider to use (overrides config: default_provider)
+        - max_iterations: int - Maximum agentic loop iterations (overrides config)
+        - temperature: float - LLM temperature (overrides config)
+
+    Configuration Priority (highest to lowest):
+        1. Explicit class attribute (if defined in subclass)
+        2. Value from config.ini [agents] section
+
+    The __new__ method:
+        1. Loads agent configuration from config.ini
+        2. Resolves configuration values with proper priority
+        3. Validates required attributes
+        4. Binds tools to the instance
+        5. Initializes LLM provider
+        6. Sets up agent state
 
     Example:
-        class SummaryAgent(BaseAgent):
-            prompt = "You are a code summarization expert..."
-            tools = [analyze_code_tool, extract_patterns_tool]
-            return_state_field = "code_summary"
+        class AnalysisAgent(BaseAgent):
+            prompt = "You are a code analysis expert..."
+            tools = [analyze_complexity_tool, detect_issues_tool]
+            return_state_field = "analysis_results"
+            temperature = 0.2  # Override config value
+            # max_iterations will come from config.ini if not explicitly set
     """
 
     # Declarative class-level attributes (override in subclasses)
-    prompt: str = ""
-    tools: list[BaseTool] = []
-    return_state_field: str = "result"
-    provider_name: str = "anthropic"
-    max_iterations: int = 10
-    temperature: float = 0.3
+    # No underscore prefix - these are public configuration attributes
+    prompt: str
+    tools: list[BaseTool]
+    return_state_field: str
+    provider_name: str
+    max_iterations: int
+    temperature: float
 
     def __new__(cls, *args: Any, **kwargs: Any) -> BaseAgent:
         """Process declarative class attributes and validate agent configuration.
 
         This __new__ implementation:
-        1. Validates that required attributes are defined
-        2. Binds tools to the instance
-        3. Initializes LLM provider
-        4. Sets up agent state
+        1. Loads agent configuration from config.ini
+        2. Applies config values, allowing class attributes to override
+        3. Validates that required attributes are defined
+        4. Binds tools to the instance
+        5. Initializes LLM provider
+        6. Sets up agent state
 
         Raises:
             ValueError: If prompt is not defined or is empty
@@ -139,6 +156,32 @@ class BaseAgent(ABC):
             TypeError: If tools are not BaseTool instances
         """
         instance = super().__new__(cls)
+
+        # Load agent configuration from config.ini
+        agent_config = ConfigParser.get(AgentConfig)
+
+        # Check which attributes are explicitly set (not inherited defaults)
+        # vs which should come from config
+        has_explicit_provider = "provider_name" in cls.__dict__
+        has_explicit_max_iterations = "max_iterations" in cls.__dict__
+        has_explicit_temperature = "temperature" in cls.__dict__
+
+        # Resolve values with priority: explicit class attribute > config file
+        provider_name = (
+            cls.provider_name
+            if has_explicit_provider
+            else agent_config.default_provider
+        )
+        max_iterations = (
+            cls.max_iterations
+            if has_explicit_max_iterations
+            else agent_config.max_iterations
+        )
+        temperature = (
+            cls.temperature
+            if has_explicit_temperature
+            else agent_config.temperature
+        )
 
         # Validate required attributes
         if not cls.prompt or not isinstance(cls.prompt, str):
@@ -162,19 +205,20 @@ class BaseAgent(ABC):
                 )
             bound_tools.append(tool)
 
-        # Store processed attributes on the instance
-        instance._prompt = cls.prompt
-        instance._tools = bound_tools
-        instance._return_state_field = cls.return_state_field
-        instance._provider_name = cls.provider_name
-        instance._max_iterations = cls.max_iterations
-        instance._temperature = cls.temperature
-        instance._agent_name = cls.__name__
+        # Store processed attributes on the instance (public, no underscore prefix)
+        instance.prompt = cls.prompt
+        instance.tools = bound_tools
+        instance.return_state_field = cls.return_state_field
+        instance.provider_name = provider_name
+        instance.max_iterations = max_iterations
+        instance.temperature = temperature
 
-        # Initialize state
+        # Internal state attributes (with underscore prefix)
+        instance._agent_name = cls.__name__
+        instance._agent_config = agent_config
         instance._state = AgentState(
             agent_name=instance._agent_name,
-            max_iterations=instance._max_iterations,
+            max_iterations=instance.max_iterations,
         )
 
         # Initialize provider (lazy-loaded)
@@ -183,10 +227,20 @@ class BaseAgent(ABC):
 
         logger.info(
             f"Initialized agent {instance._agent_name} with "
-            f"{len(bound_tools)} tools and max_iterations={instance._max_iterations}"
+            f"{len(bound_tools)} tools, max_iterations={instance.max_iterations}, "
+            f"temperature={instance.temperature}, provider={instance.provider_name}"
         )
 
         return instance
+
+    @property
+    def agent_config(self) -> AgentConfig:
+        """Get the agent configuration loaded from config.ini.
+
+        Returns:
+            AgentConfig: The agent configuration instance
+        """
+        return self._agent_config
 
     @property
     def provider(self) -> BaseProvider:
@@ -200,23 +254,18 @@ class BaseAgent(ABC):
         """
         if self._provider is None:
             try:
-                self._provider = ProviderRegistry.create(self._provider_name)
-                logger.info(f"Initialized {self._provider_name} provider for {self._agent_name}")
+                self._provider = ProviderRegistry.create(self.provider_name)
+                logger.info(f"Initialized {self.provider_name} provider for {self._agent_name}")
             except Exception as e:
                 logger.error(f"Failed to initialize provider: {str(e)}")
-                raise ValueError(f"Cannot initialize provider {self._provider_name}") from e
+                raise ValueError(f"Cannot initialize provider {self.provider_name}") from e
 
         return self._provider
 
     @property
-    def tools(self) -> list[BaseTool]:
-        """Get the list of tools available to this agent."""
-        return self._tools
-
-    @property
     def tool_names(self) -> list[str]:
         """Get the names of available tools."""
-        return [tool.name for tool in self._tools]
+        return [tool.name for tool in self.tools]
 
     @property
     def state(self) -> AgentState:
@@ -229,9 +278,9 @@ class BaseAgent(ABC):
         Returns:
             str: System prompt with tool descriptions
         """
-        system_prompt = self._prompt
+        system_prompt = self.prompt
 
-        if self._tools:
+        if self.tools:
             tool_descriptions = self._build_tool_descriptions()
             system_prompt += "\n\n" + tool_descriptions
 
@@ -243,11 +292,11 @@ class BaseAgent(ABC):
         Returns:
             str: Formatted tool descriptions
         """
-        if not self._tools:
+        if not self.tools:
             return ""
 
         descriptions = ["Available Tools:", ""]
-        for i, tool in enumerate(self._tools, 1):
+        for i, tool in enumerate(self.tools, 1):
             descriptions.append(f"{i}. {tool.name}")
             if tool.description:
                 descriptions.append(f"   Description: {tool.description}")
@@ -273,7 +322,7 @@ class BaseAgent(ABC):
             response = await self.provider.generate(
                 system_prompt=system_prompt,
                 user_prompt=user_message,
-                temperature=self._temperature,
+                temperature=self.temperature,
             )
             logger.debug(f"{self._agent_name} received response from LLM")
             return response.content
@@ -298,7 +347,7 @@ class BaseAgent(ABC):
 
         # Find the tool
         tool = None
-        for t in self._tools:
+        for t in self.tools:
             if t.name == tool_name:
                 tool = t
                 break
@@ -540,8 +589,8 @@ class BaseAgent(ABC):
             dict[str, Any]: Output formatted for LangGraph state update
         """
         return {
-            self._return_state_field: self._state.final_result,
-            f"{self._return_state_field}_state": self._state.to_dict(),
+            self.return_state_field: self._state.final_result,
+            f"{self.return_state_field}_state": self._state.to_dict(),
         }
 
     def get_state_dict(self) -> dict[str, Any]:

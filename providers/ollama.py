@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
+from config.providers import OllamaConfig
 from .base import BaseProvider, ProviderResponse
-from .config import OllamaConfig
 
 logger = logging.getLogger(__name__)
 

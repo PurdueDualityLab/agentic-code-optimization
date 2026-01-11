@@ -7,8 +7,8 @@ from typing import Any
 
 from openai import AsyncOpenAI, APIConnectionError, APIError
 
+from config.providers import OpenAIConfig
 from .base import BaseProvider, ProviderResponse
-from .config import OpenAIConfig
 
 logger = logging.getLogger(__name__)
 

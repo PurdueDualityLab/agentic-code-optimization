@@ -7,8 +7,8 @@ from typing import Any
 
 from anthropic import Anthropic, APIConnectionError, APIError
 
+from config.providers import AnthropicConfig
 from .base import BaseProvider, ProviderResponse
-from .config import AnthropicConfig
 
 logger = logging.getLogger(__name__)
 
