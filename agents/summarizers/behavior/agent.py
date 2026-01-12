@@ -14,41 +14,36 @@ This agent analyzes code to understand:
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.behavior import (
-    analyze_code_complexity,
-    analyze_code_structure,
-    analyze_data_dependencies,
-    analyze_error_handling_strategy,
-    analyze_functions,
-    analyze_function_interactions,
-    detect_performance_bottlenecks,
-    extract_code_documentation,
-    identify_code_patterns,
-)
+from tools.behavior import (analyze_code_complexity, analyze_code_structure,
+                            analyze_data_dependencies,
+                            analyze_error_handling_strategy,
+                            analyze_function_interactions, analyze_functions,
+                            detect_performance_bottlenecks,
+                            extract_code_documentation, identify_code_patterns)
 
 
 class BehaviorSummarizer(BaseAgent):
-    """Agent for analyzing code behavior and execution patterns.
+   """Agent for analyzing code behavior and execution patterns.
 
-    This agent systematically analyzes code to provide comprehensive understanding of:
-    - Function logic and execution flow
-    - Control structures and algorithms
-    - Function interactions and dependencies
-    - Design patterns and code idioms
-    - Error handling strategies
-    - Data flow and dependencies
-    - Performance characteristics
-    - Code complexity metrics
+   This agent systematically analyzes code to provide comprehensive understanding of:
+   - Function logic and execution flow
+   - Control structures and algorithms
+   - Function interactions and dependencies
+   - Design patterns and code idioms
+   - Error handling strategies
+   - Data flow and dependencies
+   - Performance characteristics
+   - Code complexity metrics
 
-    Attributes:
-        prompt: System prompt guiding the agent's analysis
-        tools: Tools available for behavior analysis
-        return_state_field: LangGraph state field name
-        temperature: LLM temperature (0.3 for deterministic analysis)
-        max_iterations: Maximum agentic loop iterations (6)
-    """
+   Attributes:
+      prompt: System prompt guiding the agent's analysis
+      tools: Tools available for behavior analysis
+      return_state_field: LangGraph state field name
+      temperature: LLM temperature (0.3 for deterministic analysis)
+      max_iterations: Maximum agentic loop iterations (6)
+   """
 
-    prompt = """You are an expert code behavior analyst with deep knowledge of:
+   prompt = """You are an expert code behavior analyst with deep knowledge of:
 - Programming languages, syntax, and semantics
 - Control flow structures and algorithms
 - Design patterns and architectural patterns
@@ -153,18 +148,18 @@ Provide a structured analysis including:
 - For recursive code, note the recursion depth and termination conditions
 - If code contains async patterns, note their usage and potential issues"""
 
-    temperature = 0.3
-    max_iterations = 6
-    return_state_field = "behavior_analysis"
+   temperature = 0.3
+   max_iterations = 6
+   return_state_field = "behavior_analysis"
 
-    tools = [
-        analyze_functions,
-        analyze_code_structure,
-        analyze_function_interactions,
-        analyze_code_complexity,
-        analyze_error_handling_strategy,
-        identify_code_patterns,
-        analyze_data_dependencies,
-        detect_performance_bottlenecks,
-        extract_code_documentation,
-    ]
+   tools = [
+      analyze_functions,
+      analyze_code_structure,
+      analyze_function_interactions,
+      analyze_code_complexity,
+      analyze_error_handling_strategy,
+      identify_code_patterns,
+      analyze_data_dependencies,
+      detect_performance_bottlenecks,
+      extract_code_documentation,
+   ]

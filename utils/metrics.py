@@ -1,8 +1,9 @@
-"""Observability utilities for agent execution tracing and metrics."""
+"""Metrics and observability utilities for agent execution tracing."""
 
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -10,9 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from agentic_logging.config import get_logger
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass

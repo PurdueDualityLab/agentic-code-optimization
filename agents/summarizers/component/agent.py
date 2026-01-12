@@ -12,36 +12,32 @@ This agent analyzes code components, architecture, and organization patterns:
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.component import (
-    analyze_classes,
-    analyze_component_boundaries,
-    analyze_inheritance_hierarchy,
-    analyze_module_structure,
-    analyze_public_apis,
-    analyze_service_architecture,
-)
+from tools.component import (analyze_classes, analyze_component_boundaries,
+                             analyze_inheritance_hierarchy,
+                             analyze_module_structure, analyze_public_apis,
+                             analyze_service_architecture)
 
 
 class ComponentSummarizer(BaseAgent):
-    """Agent for analyzing code structure and component organization.
+   """Agent for analyzing code structure and component organization.
 
-    This agent systematically analyzes code to provide comprehensive understanding of:
-    - Class definitions and inheritance hierarchies
-    - Module and package organization
-    - Public APIs and component interfaces
-    - Component boundaries and cohesion
-    - Service-oriented patterns
-    - Architectural organization
+   This agent systematically analyzes code to provide comprehensive understanding of:
+   - Class definitions and inheritance hierarchies
+   - Module and package organization
+   - Public APIs and component interfaces
+   - Component boundaries and cohesion
+   - Service-oriented patterns
+   - Architectural organization
 
-    Attributes:
-        prompt: System prompt guiding the agent's analysis
-        tools: Tools available for component analysis
-        return_state_field: LangGraph state field name
-        temperature: LLM temperature (0.3 for deterministic analysis)
-        max_iterations: Maximum agentic loop iterations (6)
-    """
+   Attributes:
+      prompt: System prompt guiding the agent's analysis
+      tools: Tools available for component analysis
+      return_state_field: LangGraph state field name
+      temperature: LLM temperature (0.3 for deterministic analysis)
+      max_iterations: Maximum agentic loop iterations (6)
+   """
 
-    prompt = """You are an expert code architecture analyst with deep knowledge of:
+   prompt = """You are an expert code architecture analyst with deep knowledge of:
 - Object-oriented design principles and patterns
 - Class hierarchies and inheritance structures
 - Module organization and package design
@@ -126,15 +122,15 @@ Provide a structured analysis including:
 - Analyze service-oriented patterns if present
 - For large codebases, focus on the primary structure"""
 
-    temperature = 0.3
-    max_iterations = 6
-    return_state_field = "component_analysis"
+   temperature = 0.3
+   max_iterations = 6
+   return_state_field = "component_analysis"
 
-    tools = [
-        analyze_module_structure,
-        analyze_classes,
-        analyze_inheritance_hierarchy,
-        analyze_public_apis,
-        analyze_component_boundaries,
-        analyze_service_architecture,
-    ]
+   tools = [
+      analyze_module_structure,
+      analyze_classes,
+      analyze_inheritance_hierarchy,
+      analyze_public_apis,
+      analyze_component_boundaries,
+      analyze_service_architecture,
+   ]

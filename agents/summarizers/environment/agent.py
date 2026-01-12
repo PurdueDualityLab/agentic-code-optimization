@@ -13,43 +13,34 @@ This agent analyzes a code repository's root directory to identify:
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.environment import (
-    analyze_repo_structure,
-    check_git_config,
-    list_repo_config_files,
-    read_build_gradle,
-    read_cargo_toml,
-    read_docker_compose,
-    read_dockerfile,
-    read_env_files,
-    read_go_mod,
-    read_package_json,
-    read_pyproject_toml,
-    read_pom_xml,
-    read_requirements_txt,
-)
+from tools.environment import (analyze_repo_structure, check_git_config,
+                               list_repo_config_files, read_build_gradle,
+                               read_cargo_toml, read_docker_compose,
+                               read_dockerfile, read_env_files, read_go_mod,
+                               read_package_json, read_pom_xml,
+                               read_pyproject_toml, read_requirements_txt)
 
 
 class EnvironmentSummarizer(BaseAgent):
-    """Agent for analyzing repository environment and configuration.
+   """Agent for analyzing repository environment and configuration.
 
-    This agent systematically analyzes a repository's structure and configuration
-    files to provide a comprehensive understanding of:
-    - Project technology stack
-    - Dependencies and their versions
-    - Build and deployment infrastructure
-    - Environment configuration requirements
-    - Development tooling and CI/CD setup
+   This agent systematically analyzes a repository's structure and configuration
+   files to provide a comprehensive understanding of:
+   - Project technology stack
+   - Dependencies and their versions
+   - Build and deployment infrastructure
+   - Environment configuration requirements
+   - Development tooling and CI/CD setup
 
-    Attributes:
-        prompt: System prompt guiding the agent's analysis
-        tools: Tools available for repository analysis
-        return_state_field: LangGraph state field name
-        temperature: LLM temperature (0.3 for deterministic analysis)
-        max_iterations: Maximum agentic loop iterations (6)
-    """
+   Attributes:
+      prompt: System prompt guiding the agent's analysis
+      tools: Tools available for repository analysis
+      return_state_field: LangGraph state field name
+      temperature: LLM temperature (0.3 for deterministic analysis)
+      max_iterations: Maximum agentic loop iterations (6)
+   """
 
-    prompt = """You are an expert repository environment analyzer with deep knowledge of:
+   prompt = """You are an expert repository environment analyzer with deep knowledge of:
 - Programming languages, frameworks, and their ecosystems
 - Package managers and build systems across multiple languages
 - Containerization technologies (Docker, Kubernetes, etc.)
@@ -130,22 +121,22 @@ Provide a structured analysis including:
 - Identify both primary and secondary technologies
 - For monorepos, analyze the overall structure and key workspaces"""
 
-    temperature = 0.3
-    max_iterations = 6
-    return_state_field = "environment_analysis"
+   #  temperature = 0.15
+   # max_iterations = 10
+   return_state_field = "environment_analysis"
 
-    tools = [
-        list_repo_config_files,
-        analyze_repo_structure,
-        check_git_config,
-        read_package_json,
-        read_requirements_txt,
-        read_pyproject_toml,
-        read_dockerfile,
-        read_docker_compose,
-        read_env_files,
-        read_pom_xml,
-        read_build_gradle,
-        read_go_mod,
-        read_cargo_toml,
-    ]
+   tools = [
+      list_repo_config_files,
+      analyze_repo_structure,
+      check_git_config,
+      read_package_json,
+      read_requirements_txt,
+      read_pyproject_toml,
+      read_dockerfile,
+      read_docker_compose,
+      read_env_files,
+      read_pom_xml,
+      read_build_gradle,
+      read_go_mod,
+      read_cargo_toml,
+   ]
