@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
+from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
+from langgraph.graph import END, START, MessagesState, StateGraph
 from langsmith import traceable
 
 from config import AgentConfig, ConfigParser
@@ -78,9 +80,66 @@ class BaseAgent:
         self.iteration_count = 0
         self.final_result = None
 
-    @traceable(name="agent_run", tags=["agent"])
+    @traceable(name="llm_call", tags=["llm_node"])
+    def _llm_call(self, state: MessagesState) -> dict[str, Any]:
+        """LLM node - decides whether to call a tool or respond."""
+        messages = [SystemMessage(content=self.prompt)] + state["messages"]
+        response = self.llm_with_tools.invoke(messages)
+        logger.info(f"{self.name} LLM call completed")
+        return {"messages": [response]}
+
+    @traceable(name="tool_execution", tags=["tool_node"])
+    def _tool_node(self, state: MessagesState) -> dict[str, Any]:
+        """Tool node - executes tool calls from LLM response."""
+        results = []
+        last_message = state["messages"][-1]
+
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            for tool_call in last_message.tool_calls:
+                tool = self.tools_by_name.get(tool_call["name"])
+                if tool:
+                    try:
+                        observation = tool.invoke(tool_call["args"])
+                        results.append(
+                            ToolMessage(
+                                content=str(observation),
+                                tool_call_id=tool_call["id"],
+                            )
+                        )
+                        logger.info(f"{self.name} executed tool: {tool_call['name']}")
+                    except Exception as e:
+                        logger.error(
+                            f"{self.name} tool execution failed for {tool_call['name']}: {str(e)}"
+                        )
+                        results.append(
+                            ToolMessage(
+                                content=f"Error: {str(e)}",
+                                tool_call_id=tool_call["id"],
+                            )
+                        )
+                else:
+                    logger.warning(f"{self.name} tool not found: {tool_call['name']}")
+                    results.append(
+                        ToolMessage(
+                            content=f"Error: Tool '{tool_call['name']}' not found",
+                            tool_call_id=tool_call["id"],
+                        )
+                    )
+
+        return {"messages": results}
+
+    def _should_continue(self, state: MessagesState) -> Literal["tool_node", END]:
+        """Conditional edge - route based on whether LLM made tool calls."""
+        last_message = state["messages"][-1]
+
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "tool_node"
+
+        return END
+
+    @traceable(name="agent_run", tags=["main_loop"])
     async def run(self, input_text: str) -> str:
-        """Execute the agent with the given input.
+        """Execute the agent with the given input using LangGraph.
 
         Args:
             input_text: Input text for the agent to process
@@ -88,101 +147,43 @@ class BaseAgent:
         Returns:
             Final result from the agent
         """
-        self.messages = [{"role": "user", "content": input_text}]
-        self.iteration_count = 0
+        # Build the StateGraph
+        agent_builder = StateGraph(MessagesState)
 
-        while self.iteration_count < self.max_iterations:
-            # Call LLM with tools
-            response = await self.llm_with_tools.generate(
-                system_prompt=self.prompt,
-                user_prompt=input_text,
-                tools=self.tools,
-                temperature=self.temperature,
-            )
+        # Add nodes
+        agent_builder.add_node("llm_call", self._llm_call)
+        agent_builder.add_node("tool_node", self._tool_node)
 
-            self.messages.append({"role": "assistant", "content": response.content})
-            logger.info(f"{self.name} iteration {self.iteration_count + 1}/{self.max_iterations}")
+        # Add edges
+        agent_builder.add_edge(START, "llm_call")
+        agent_builder.add_conditional_edges(
+            "llm_call",
+            self._should_continue,
+            {"tool_node": "tool_node", END: END},
+        )
+        agent_builder.add_edge("tool_node", "llm_call")
 
-            # Check if response contains tool calls
-            tool_calls = self._extract_tool_calls(response.content)
+        # Compile the graph
+        compiled_graph = agent_builder.compile()
 
-            if tool_calls:
-                # Execute tools
-                for tool_call in tool_calls:
-                    tool_result = await self._execute_tool(tool_call)
-                    self.messages.append({"role": "tool", "content": str(tool_result)})
-                    logger.info(f"{self.name} executed tool: {tool_call.get('name', 'unknown')}")
-            else:
-                # No tool calls - this is the final response
-                self.final_result = response.content
-                return response.content
+        # Execute the graph
+        initial_messages = [HumanMessage(content=input_text)]
+        result = compiled_graph.invoke({"messages": initial_messages})
 
-            self.iteration_count += 1
+        # Extract final response
+        final_messages = result["messages"]
+        final_message = final_messages[-1]
 
-        logger.warning(f"{self.name} reached max iterations")
-        self.final_result = "Max iterations reached"
+        if hasattr(final_message, "content"):
+            self.final_result = final_message.content
+        else:
+            self.final_result = str(final_message)
+
+        # Update messages history for compatibility
+        self.messages = final_messages
+        self.iteration_count = len([m for m in final_messages if hasattr(m, "content")])
+
         return self.final_result
-
-    def _extract_tool_calls(self, response: str) -> list[dict[str, Any]]:
-        """Extract tool calls from LLM response.
-
-        Supports extraction from JSON tool_calls format.
-
-        Args:
-            response: LLM response text
-
-        Returns:
-            List of tool call dictionaries with 'name' and 'args' keys
-        """
-        tool_calls = []
-
-        # Look for tool_calls JSON pattern in response
-        # Pattern: "tool_calls": [{"name": "...", "args": {...}}]
-        import re
-
-        pattern = r'"tool_calls"\s*:\s*(\[.*?\])'
-        match = re.search(pattern, response, re.DOTALL)
-
-        if match:
-            try:
-                tool_calls_json = json.loads(match.group(1))
-                if isinstance(tool_calls_json, list):
-                    tool_calls = tool_calls_json
-            except json.JSONDecodeError:
-                pass
-
-        return tool_calls
-
-    async def _execute_tool(self, tool_call: dict[str, Any]) -> str:
-        """Execute a single tool with given arguments.
-
-        Args:
-            tool_call: Dictionary with 'name' and 'args' keys
-
-        Returns:
-            Tool execution result as string
-        """
-        tool_name = tool_call.get("name")
-        tool_args = tool_call.get("args", {})
-
-        if not tool_name:
-            return "Error: No tool name provided"
-
-        tool = self.tools_by_name.get(tool_name)
-        if not tool:
-            return f"Error: Tool '{tool_name}' not found"
-
-        try:
-            # Execute tool
-            if callable(tool.func):
-                result = tool.func(**tool_args) if tool_args else tool.func()
-            else:
-                result = tool.invoke(tool_args)
-
-            return str(result)
-        except Exception as e:
-            logger.error(f"Tool execution failed for {tool_name}: {str(e)}")
-            return f"Error: {str(e)}"
 
     def get_langgraph_output(self) -> dict[str, Any]:
         """Get output in LangGraph compatible format.
