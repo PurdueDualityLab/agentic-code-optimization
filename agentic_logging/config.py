@@ -18,7 +18,7 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger instance
     """
-    return logging.getLogger(name)
+    return logger.getLogger(name)
 
 
 # Compatibility classes (kept for backwards compatibility)

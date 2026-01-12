@@ -7,24 +7,19 @@ Usage:
     python evaluate.py <repo_path>              # Run on specific repository
 """
 
-import asyncio
 import logging
 import sys
 from pathlib import Path
 
+from beautilog import logger
 from dotenv import load_dotenv
 
 from agents.summarizers import EnvironmentSummarizer
 
 load_dotenv()
 
-# Initialize logging
-_log_dir = Path.cwd() / "logs"
-logger = logging.getLogger(__name__)
-logger.info("Evaluation script started")
 
-
-async def evaluate_environment_summarizer(repo_path: str) -> None:
+def evaluate_environment_summarizer(repo_path: str) -> None:
     """Evaluate EnvironmentSummarizer on a given repository.
 
     Args:
@@ -67,7 +62,7 @@ async def evaluate_environment_summarizer(repo_path: str) -> None:
 
     try:
         logger.info(f"Starting agent execution for repository: {repo_path_obj.absolute()}")
-        result = await agent.run(str(repo_path_obj.absolute()))
+        result = agent.run(str(repo_path_obj.absolute()))
         logger.info(f"Agent execution completed successfully, result length: {len(result) if result else 0}")
         print(result)
     except Exception as e:
@@ -83,6 +78,9 @@ async def evaluate_environment_summarizer(repo_path: str) -> None:
     # Execution summary
     print("EXECUTION SUMMARY:")
     print(f"  Iterations: {agent.iteration_count}/{agent.max_iterations}")
+    print(f"  Tools Used: {agent.tools_used_count}")
+    print(f"  Unique Tools Used: {len(agent.tools_used_names)}")
+    print(f"  Tools Used Names: {agent.tools_used_names}")
     print(f"  Final Result Length: {len(result) if result else 0} characters")
     print()
 
@@ -107,7 +105,7 @@ def main() -> None:
         # Use current project directory as default
         repo_path = str(Path(__file__).parent.absolute())
 
-    asyncio.run(evaluate_environment_summarizer(repo_path))
+    evaluate_environment_summarizer(repo_path)
 
 
 if __name__ == "__main__":
