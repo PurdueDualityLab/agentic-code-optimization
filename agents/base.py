@@ -16,7 +16,6 @@ from typing import Any, Literal
 from langchain.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
-from langsmith import traceable
 
 from config import AgentConfig, ConfigParser
 from providers import LLM, ProviderRegistry
@@ -80,7 +79,6 @@ class BaseAgent:
         self.iteration_count = 0
         self.final_result = None
 
-    @traceable(name="llm_call", tags=["llm_node"])
     def _llm_call(self, state: MessagesState) -> dict[str, Any]:
         """LLM node - decides whether to call a tool or respond."""
         messages = [SystemMessage(content=self.prompt)] + state["messages"]
@@ -88,7 +86,6 @@ class BaseAgent:
         logger.info(f"{self.name} LLM call completed")
         return {"messages": [response]}
 
-    @traceable(name="tool_execution", tags=["tool_node"])
     def _tool_node(self, state: MessagesState) -> dict[str, Any]:
         """Tool node - executes tool calls from LLM response."""
         results = []
@@ -137,7 +134,6 @@ class BaseAgent:
 
         return END
 
-    @traceable(name="agent_run", tags=["main_loop"])
     async def run(self, input_text: str) -> str:
         """Execute the agent with the given input using LangGraph.
 

@@ -8,6 +8,7 @@ Usage:
 """
 
 import asyncio
+import logging
 import sys
 from pathlib import Path
 
@@ -16,6 +17,11 @@ from dotenv import load_dotenv
 from agents.summarizers import EnvironmentSummarizer
 
 load_dotenv()
+
+# Initialize logging
+_log_dir = Path.cwd() / "logs"
+logger = logging.getLogger(__name__)
+logger.info("Evaluation script started")
 
 
 async def evaluate_environment_summarizer(repo_path: str) -> None:
@@ -60,9 +66,12 @@ async def evaluate_environment_summarizer(repo_path: str) -> None:
     print("-" * 80)
 
     try:
+        logger.info(f"Starting agent execution for repository: {repo_path_obj.absolute()}")
         result = await agent.run(str(repo_path_obj.absolute()))
+        logger.info(f"Agent execution completed successfully, result length: {len(result) if result else 0}")
         print(result)
     except Exception as e:
+        logger.error(f"Agent execution failed: {str(e)}", exc_info=True)
         print(f"❌ Agent execution failed: {str(e)}")
         import traceback
         traceback.print_exc()
@@ -87,6 +96,7 @@ async def evaluate_environment_summarizer(repo_path: str) -> None:
     print("=" * 80)
     print("✓ EVALUATION COMPLETE")
     print("=" * 80)
+    logger.info("Evaluation completed successfully")
 
 
 def main() -> None:
