@@ -1,6 +1,6 @@
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_ollama import OllamaLLM
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from config import (AgentConfig, AnthropicConfig, ConfigParser, OllamaConfig,
@@ -28,12 +28,12 @@ ProviderRegistry["anthropic"] = ChatAnthropic(
 )
 
 ollama_config = ConfigParser.get(OllamaConfig)
-ProviderRegistry["ollama"] = OllamaLLM(
+ProviderRegistry["ollama"] = ChatOllama(
     model=ollama_config.model,
     temperature=ollama_config.temperature,
     max_tokens=ollama_config.max_tokens,
-    ollama_server_url=ollama_config.base_url,
-    request_timeout=ollama_config.timeout,
+    base_url=ollama_config.base_url,
+    keep_alive=ollama_config.keep_alive
 )
 
 agent_base_config = ConfigParser.get(AgentConfig)
