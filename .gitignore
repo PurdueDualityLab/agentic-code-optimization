@@ -58,6 +58,7 @@ config/local_config.yaml
 # Logs
 *.log
 logs/
+runs/
 
 # OS
 .DS_Store

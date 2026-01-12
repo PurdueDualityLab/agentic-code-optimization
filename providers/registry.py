@@ -1,135 +1,44 @@
-"""Provider registry for managing and loading LLM providers."""
+from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_ollama import OllamaLLM
+from langchain_openai import ChatOpenAI
 
-from __future__ import annotations
+from config import (AgentConfig, AnthropicConfig, ConfigParser, OllamaConfig,
+                    OpenAIConfig)
 
-import logging
-from typing import Type
+ProviderRegistry: dict[str, BaseChatModel] = {}
 
-from config.parser import ConfigParser
+openai_config = ConfigParser.get(OpenAIConfig)
+ProviderRegistry["openai"] = ChatOpenAI(
+    model_name=openai_config.model,
+    temperature=openai_config.temperature,
+    max_tokens=openai_config.max_tokens,
+    openai_api_key=openai_config.api_key,
+    organization=openai_config.organization_id,
+    request_timeout=openai_config.timeout,
+)
 
-from config.providers import AnthropicConfig, OllamaConfig, OpenAIConfig
+anthropic_config = ConfigParser.get(AnthropicConfig)
+ProviderRegistry["anthropic"] = ChatAnthropic(
+    model=anthropic_config.model,
+    temperature=anthropic_config.temperature,
+    max_tokens=anthropic_config.max_tokens,
+    anthropic_api_key=anthropic_config.api_key,
+    request_timeout=anthropic_config.timeout,
+)
 
-from .anthropic import AnthropicProvider
-from .base import BaseProvider
-from .ollama import OllamaProvider
-from .openai import OpenAIProvider
+ollama_config = ConfigParser.get(OllamaConfig)
+ProviderRegistry["ollama"] = OllamaLLM(
+    model=ollama_config.model,
+    temperature=ollama_config.temperature,
+    max_tokens=ollama_config.max_tokens,
+    ollama_server_url=ollama_config.base_url,
+    request_timeout=ollama_config.timeout,
+)
 
-logger = logging.getLogger(__name__)
+agent_base_config = ConfigParser.get(AgentConfig)
+LLM = ProviderRegistry.get(agent_base_config.default_provider)
 
-
-class ProviderRegistry:
-    """Registry for dynamically managing LLM providers."""
-
-    _providers: dict[str, Type[BaseProvider]] = {
-        "ollama": OllamaProvider,
-        "openai": OpenAIProvider,
-        "anthropic": AnthropicProvider,
-    }
-
-    _config_map: dict[str, Type] = {
-        "ollama": OllamaConfig,
-        "openai": OpenAIConfig,
-        "anthropic": AnthropicConfig,
-    }
-
-    @classmethod
-    def register(
-        cls,
-        name: str,
-        provider_class: Type[BaseProvider],
-        config_class: Type | None = None,
-    ) -> None:
-        """
-        Register a new provider.
-
-        Args:
-            name: Unique provider identifier
-            provider_class: Provider class (must inherit from BaseProvider)
-            config_class: Config class (must inherit from SubSectionParser)
-        """
-        if not issubclass(provider_class, BaseProvider):
-            raise TypeError(f"{provider_class} must inherit from BaseProvider")
-
-        cls._providers[name] = provider_class
-        if config_class:
-            cls._config_map[name] = config_class
-
-        logger.info(f"Registered provider: {name}")
-
-    @classmethod
-    def create(cls, provider_name: str) -> BaseProvider:
-        """
-        Create a provider instance from config.
-
-        Args:
-            provider_name: Name of the provider to instantiate
-
-        Returns:
-            Initialized provider instance
-
-        Raises:
-            ValueError: If provider name not found in registry
-        """
-        if provider_name not in cls._providers:
-            available = ", ".join(cls._providers.keys())
-            raise ValueError(
-                f"Unknown provider: {provider_name}. Available: {available}"
-            )
-
-        provider_class = cls._providers[provider_name]
-        config_class = cls._config_map.get(provider_name)
-
-        if config_class is None:
-            logger.warning(f"No config class for provider {provider_name}")
-            return provider_class()
-
-        try:
-            config = ConfigParser.get(config_class)
-            logger.info(f"Created {provider_name} provider with config")
-            return provider_class(config)
-        except Exception as e:
-            logger.error(f"Failed to create {provider_name} provider: {str(e)}")
-            raise
-
-    @classmethod
-    def get_available(cls) -> list[str]:
-        """
-        Get list of available providers.
-
-        Returns:
-            List of registered provider names
-        """
-        return list(cls._providers.keys())
-
-    @classmethod
-    def is_registered(cls, provider_name: str) -> bool:
-        """
-        Check if provider is registered.
-
-        Args:
-            provider_name: Name of provider to check
-
-        Returns:
-            True if provider is registered, False otherwise
-        """
-        return provider_name in cls._providers
-
-    @classmethod
-    async def validate_provider(cls, provider_name: str) -> bool:
-        """
-        Validate a provider's connection.
-
-        Args:
-            provider_name: Name of provider to validate
-
-        Returns:
-            True if provider connection is valid, False otherwise
-        """
-        try:
-            provider = cls.create(provider_name)
-            is_valid = await provider.validate_connection()
-            logger.info(f"Provider {provider_name} validation: {is_valid}")
-            return is_valid
-        except Exception as e:
-            logger.error(f"Provider {provider_name} validation failed: {str(e)}")
-            return False
+if not LLM:
+    raise ValueError(f"Unsupported provider type: {agent_base_config.default_provider}")
+__all__ = ["ProviderRegistry", "LLM"]

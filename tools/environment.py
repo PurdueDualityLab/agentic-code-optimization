@@ -14,42 +14,9 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# File Discovery & Analysis
-# ============================================================================
-
-def detect_git_config(repo_root: str) -> dict[str, Any]:
-    """Detect Git configuration and repository information."""
-    git_dir = Path(repo_root) / ".git"
-    if not git_dir.exists():
-        return {"found": False, "message": "Git repository not detected"}
-
-    try:
-        analysis = {"found": True, "path": str(git_dir)}
-        if (git_dir / "bare").exists():
-            analysis["is_bare"] = True
-
-        config_path = git_dir / "config"
-        if config_path.exists():
-            content = config_path.read_text()
-            analysis["has_config"] = True
-            for line in content.split("\n"):
-                if "url = " in line:
-                    analysis["remote_url"] = line.split("url = ")[1].strip()
-                    break
-
-        analysis["has_hooks"] = (git_dir / "hooks").exists()
-        analysis["has_objects"] = (git_dir / "objects").exists()
-        analysis["has_refs"] = (git_dir / "refs").exists()
-        analysis["has_gitignore"] = (Path(repo_root) / ".gitignore").exists()
-        return analysis
-    except Exception as e:
-        logger.error(f"Error analyzing Git config: {str(e)}")
-        return {"found": True, "error": f"Failed to analyze: {str(e)}", "path": str(git_dir)}
-
-
-def list_config_files(repo_root: str) -> dict[str, Any]:
-    """List all configuration files found in the repository root."""
+@tool
+def list_repo_config_files(repo_path: str) -> str:
+    """List all configuration files found in repository root."""
     config_patterns = {
         "build_system": ["Makefile", "CMakeLists.txt", "build.sh", "setup.py", "setup.cfg", "Rakefile", "Gemfile"],
         "package_managers": ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "requirements.txt",
@@ -71,7 +38,7 @@ def list_config_files(repo_root: str) -> dict[str, Any]:
     }
 
     found_configs = {category: [] for category in config_patterns}
-    root_path = Path(repo_root)
+    root_path = Path(repo_path)
 
     for category, patterns in config_patterns.items():
         for pattern in patterns:
@@ -79,14 +46,16 @@ def list_config_files(repo_root: str) -> dict[str, Any]:
                 found_configs[category].append(pattern)
 
     total_found = sum(len(items) for items in found_configs.values())
-    return {"found": total_found > 0, "total_config_files": total_found, "config_files_by_category": found_configs}
+    result = {"found": total_found > 0, "total_config_files": total_found, "config_files_by_category": found_configs}
+    return json.dumps(result, indent=2)
 
 
-def analyze_directory_structure(repo_root: str, max_depth: int = 3) -> dict[str, Any]:
-    """Analyze directory structure to identify project type and organization."""
+@tool
+def analyze_repo_structure(repo_path: str) -> str:
+    """Analyze repository directory structure to identify project type."""
     try:
-        root_path = Path(repo_root)
-        analysis = {"found": True, "path": str(root_path), "max_depth": max_depth}
+        root_path = Path(repo_path)
+        analysis = {"found": True, "path": str(root_path), "max_depth": 3}
 
         top_dirs = [item.name for item in root_path.iterdir() if item.is_dir() and not item.name.startswith(".")]
         analysis["top_level_directories"] = sorted(top_dirs)
@@ -131,21 +100,150 @@ def analyze_directory_structure(repo_root: str, max_depth: int = 3) -> dict[str,
             subdirs_analysis[directory] = {"file_count": min(file_count, 1000)}
 
         analysis["subdirectories"] = subdirs_analysis
-        return analysis
+        return json.dumps(analysis, indent=2)
     except Exception as e:
         logger.error(f"Error analyzing directory structure: {str(e)}")
-        return {"found": False, "error": f"Failed to analyze: {str(e)}"}
+        return json.dumps({"found": False, "error": f"Failed to analyze: {str(e)}"}, indent=2)
 
 
-# ============================================================================
-# Configuration Parsers
-# ============================================================================
+@tool
+def check_git_config(repo_path: str) -> str:
+    """Detect and analyze Git configuration."""
+    git_dir = Path(repo_path) / ".git"
+    if not git_dir.exists():
+        return json.dumps({"found": False, "message": "Git repository not detected"}, indent=2)
 
-def parse_dockerfile(repo_root: str) -> dict[str, Any]:
-    """Parse Dockerfile to extract base image, exposed ports, and environment variables."""
-    dockerfile_path = Path(repo_root) / "Dockerfile"
+    try:
+        analysis = {"found": True, "path": str(git_dir)}
+        if (git_dir / "bare").exists():
+            analysis["is_bare"] = True
+
+        config_path = git_dir / "config"
+        if config_path.exists():
+            content = config_path.read_text()
+            analysis["has_config"] = True
+            for line in content.split("\n"):
+                if "url = " in line:
+                    analysis["remote_url"] = line.split("url = ")[1].strip()
+                    break
+
+        analysis["has_hooks"] = (git_dir / "hooks").exists()
+        analysis["has_objects"] = (git_dir / "objects").exists()
+        analysis["has_refs"] = (git_dir / "refs").exists()
+        analysis["has_gitignore"] = (Path(repo_path) / ".gitignore").exists()
+        return json.dumps(analysis, indent=2)
+    except Exception as e:
+        logger.error(f"Error analyzing Git config: {str(e)}")
+        return json.dumps({"found": True, "error": f"Failed to analyze: {str(e)}", "path": str(git_dir)}, indent=2)
+
+
+@tool
+def read_package_json(repo_path: str) -> str:
+    """Parse package.json (Node.js/JavaScript)."""
+    package_json_path = Path(repo_path) / "package.json"
+    if not package_json_path.exists():
+        return json.dumps({"found": False, "message": "package.json not found"}, indent=2)
+
+    try:
+        with open(package_json_path) as f:
+            data = json.load(f)
+
+        analysis = {
+            "found": True, "path": str(package_json_path), "name": data.get("name", ""),
+            "version": data.get("version", ""), "description": data.get("description", ""),
+            "type": data.get("type", "commonjs"),
+            "dependencies": list(data.get("dependencies", {}).keys()),
+            "dev_dependencies": list(data.get("devDependencies", {}).keys()),
+            "peer_dependencies": list(data.get("peerDependencies", {}).keys()),
+            "scripts": list(data.get("scripts", {}).keys()),
+            "engines": data.get("engines", {}),
+            "author": data.get("author", ""),
+            "license": data.get("license", ""),
+        }
+        return json.dumps(analysis, indent=2)
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing package.json: {str(e)}")
+        return json.dumps({"found": True, "error": f"Invalid JSON: {str(e)}", "path": str(package_json_path)}, indent=2)
+    except Exception as e:
+        logger.error(f"Error reading package.json: {str(e)}")
+        return json.dumps({"found": False, "error": str(e)}, indent=2)
+
+
+@tool
+def read_requirements_txt(repo_path: str) -> str:
+    """Parse requirements.txt files (Python)."""
+    req_files = [Path(repo_path) / f for f in ["requirements.txt", "requirements-dev.txt", "requirements-prod.txt"]]
+    all_requirements = {}
+
+    for req_file in req_files:
+        if req_file.exists():
+            try:
+                content = req_file.read_text()
+                packages = []
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    pkg = re.split(r'[\[\>=<~!]', line)[0].strip()
+                    if pkg:
+                        packages.append(pkg)
+                all_requirements[req_file.name] = packages
+            except Exception as e:
+                logger.error(f"Error parsing {req_file}: {str(e)}")
+
+    result = {"found": True, "files": all_requirements, "total_dependencies": sum(len(v) for v in all_requirements.values())} if all_requirements else {"found": False, "message": "requirements.txt files not found"}
+    return json.dumps(result, indent=2)
+
+
+@tool
+def read_pyproject_toml(repo_path: str) -> str:
+    """Parse pyproject.toml (Modern Python)."""
+    pyproject_path = Path(repo_path) / "pyproject.toml"
+    if not pyproject_path.exists():
+        return json.dumps({"found": False, "message": "pyproject.toml not found"}, indent=2)
+
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib
+        except ImportError:
+            logger.warning("tomli not available")
+            return json.dumps({"found": True, "error": "TOML parser not available", "path": str(pyproject_path)}, indent=2)
+
+    try:
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+
+        analysis = {"found": True, "path": str(pyproject_path)}
+        if "project" in data:
+            project = data["project"]
+            analysis["name"] = project.get("name", "")
+            analysis["version"] = project.get("version", "")
+            analysis["description"] = project.get("description", "")
+            analysis["dependencies"] = project.get("dependencies", [])
+            analysis["optional_dependencies"] = list(project.get("optional-dependencies", {}).keys())
+
+        if "tool" in data:
+            tools = data["tool"]
+            analysis["tools"] = list(tools.keys())
+            if "poetry" in tools:
+                poetry = tools["poetry"]
+                analysis["poetry_dependencies"] = list(poetry.get("dependencies", {}).keys())
+                analysis["poetry_dev_dependencies"] = list(poetry.get("dev-dependencies", {}).keys())
+
+        return json.dumps(analysis, indent=2)
+    except Exception as e:
+        logger.error(f"Error parsing pyproject.toml: {str(e)}")
+        return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(pyproject_path)}, indent=2)
+
+
+@tool
+def read_dockerfile(repo_path: str) -> str:
+    """Parse Dockerfile for container configuration."""
+    dockerfile_path = Path(repo_path) / "Dockerfile"
     if not dockerfile_path.exists():
-        return {"found": False, "message": "Dockerfile not found"}
+        return json.dumps({"found": False, "message": "Dockerfile not found"}, indent=2)
 
     try:
         content = dockerfile_path.read_text()
@@ -175,15 +273,16 @@ def parse_dockerfile(repo_root: str) -> dict[str, Any]:
         analysis["environment_variables"] = env_vars
         analysis["raw_content"] = content[:500]
         analysis["total_lines"] = len(content.split("\n"))
-        return analysis
+        return json.dumps(analysis, indent=2)
     except Exception as e:
         logger.error(f"Error parsing Dockerfile: {str(e)}")
-        return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(dockerfile_path)}
+        return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(dockerfile_path)}, indent=2)
 
 
-def parse_docker_compose(repo_root: str) -> dict[str, Any]:
-    """Parse docker-compose.yml to extract services and configuration."""
-    compose_paths = [Path(repo_root) / f for f in ["docker-compose.yml", "docker-compose.yaml", "compose.yml"]]
+@tool
+def read_docker_compose(repo_path: str) -> str:
+    """Parse docker-compose.yml for multi-container setup."""
+    compose_paths = [Path(repo_path) / f for f in ["docker-compose.yml", "docker-compose.yaml", "compose.yml"]]
 
     for compose_path in compose_paths:
         if compose_path.exists():
@@ -193,7 +292,7 @@ def parse_docker_compose(repo_root: str) -> dict[str, Any]:
                     data = yaml.safe_load(f)
 
                 if not isinstance(data, dict):
-                    return {"found": False, "message": "Invalid docker-compose format"}
+                    return json.dumps({"found": False, "message": "Invalid docker-compose format"}, indent=2)
 
                 analysis = {"found": True, "path": str(compose_path), "version": data.get("version", "unknown")}
                 services = data.get("services", {})
@@ -214,17 +313,18 @@ def parse_docker_compose(repo_root: str) -> dict[str, Any]:
 
                 analysis["environment_variables"] = env_vars
                 analysis["volumes"] = data.get("volumes", {})
-                return analysis
+                return json.dumps(analysis, indent=2)
             except Exception as e:
                 logger.error(f"Error parsing {compose_path}: {str(e)}")
-                return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(compose_path)}
+                return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(compose_path)}, indent=2)
 
-    return {"found": False, "message": "docker-compose files not found"}
+    return json.dumps({"found": False, "message": "docker-compose files not found"}, indent=2)
 
 
-def parse_dotenv(repo_root: str) -> dict[str, Any]:
-    """Parse .env files to extract environment variables."""
-    env_files = [Path(repo_root) / f for f in [".env", ".env.local", ".env.example"]]
+@tool
+def read_env_files(repo_path: str) -> str:
+    """Parse .env files for environment configuration."""
+    env_files = [Path(repo_path) / f for f in [".env", ".env.local", ".env.example"]]
     all_vars = {}
     found_files = []
 
@@ -243,111 +343,16 @@ def parse_dotenv(repo_root: str) -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"Error parsing {env_file}: {str(e)}")
 
-    return {"found": True, "files": found_files, "variables": all_vars} if found_files else {"found": False, "message": ".env files not found"}
+    result = {"found": True, "files": found_files, "variables": all_vars} if found_files else {"found": False, "message": ".env files not found"}
+    return json.dumps(result, indent=2)
 
 
-def parse_package_json(repo_root: str) -> dict[str, Any]:
-    """Parse package.json to extract Node.js dependencies and configuration."""
-    package_json_path = Path(repo_root) / "package.json"
-    if not package_json_path.exists():
-        return {"found": False, "message": "package.json not found"}
-
-    try:
-        with open(package_json_path) as f:
-            data = json.load(f)
-
-        analysis = {
-            "found": True, "path": str(package_json_path), "name": data.get("name", ""),
-            "version": data.get("version", ""), "description": data.get("description", ""),
-            "type": data.get("type", "commonjs"),
-            "dependencies": list(data.get("dependencies", {}).keys()),
-            "dev_dependencies": list(data.get("devDependencies", {}).keys()),
-            "peer_dependencies": list(data.get("peerDependencies", {}).keys()),
-            "scripts": list(data.get("scripts", {}).keys()),
-            "engines": data.get("engines", {}),
-            "author": data.get("author", ""),
-            "license": data.get("license", ""),
-        }
-        return analysis
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing package.json: {str(e)}")
-        return {"found": True, "error": f"Invalid JSON: {str(e)}", "path": str(package_json_path)}
-    except Exception as e:
-        logger.error(f"Error reading package.json: {str(e)}")
-        return {"found": False, "error": str(e)}
-
-
-def parse_requirements_txt(repo_root: str) -> dict[str, Any]:
-    """Parse requirements.txt to extract Python dependencies."""
-    req_files = [Path(repo_root) / f for f in ["requirements.txt", "requirements-dev.txt", "requirements-prod.txt"]]
-    all_requirements = {}
-
-    for req_file in req_files:
-        if req_file.exists():
-            try:
-                content = req_file.read_text()
-                packages = []
-                for line in content.split("\n"):
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    pkg = re.split(r'[\[\>=<~!]', line)[0].strip()
-                    if pkg:
-                        packages.append(pkg)
-                all_requirements[req_file.name] = packages
-            except Exception as e:
-                logger.error(f"Error parsing {req_file}: {str(e)}")
-
-    return {"found": True, "files": all_requirements, "total_dependencies": sum(len(v) for v in all_requirements.values())} if all_requirements else {"found": False, "message": "requirements.txt files not found"}
-
-
-def parse_pyproject_toml(repo_root: str) -> dict[str, Any]:
-    """Parse pyproject.toml to extract Python project configuration."""
-    pyproject_path = Path(repo_root) / "pyproject.toml"
-    if not pyproject_path.exists():
-        return {"found": False, "message": "pyproject.toml not found"}
-
-    try:
-        import tomllib
-    except ImportError:
-        try:
-            import tomli as tomllib
-        except ImportError:
-            logger.warning("tomli not available")
-            return {"found": True, "error": "TOML parser not available", "path": str(pyproject_path)}
-
-    try:
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-
-        analysis = {"found": True, "path": str(pyproject_path)}
-        if "project" in data:
-            project = data["project"]
-            analysis["name"] = project.get("name", "")
-            analysis["version"] = project.get("version", "")
-            analysis["description"] = project.get("description", "")
-            analysis["dependencies"] = project.get("dependencies", [])
-            analysis["optional_dependencies"] = list(project.get("optional-dependencies", {}).keys())
-
-        if "tool" in data:
-            tools = data["tool"]
-            analysis["tools"] = list(tools.keys())
-            if "poetry" in tools:
-                poetry = tools["poetry"]
-                analysis["poetry_dependencies"] = list(poetry.get("dependencies", {}).keys())
-                analysis["poetry_dev_dependencies"] = list(poetry.get("dev-dependencies", {}).keys())
-
-        return analysis
-    except Exception as e:
-        logger.error(f"Error parsing pyproject.toml: {str(e)}")
-        return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(pyproject_path)}
-
-
-def parse_maven_pom(repo_root: str) -> dict[str, Any]:
-    """Parse pom.xml to extract Maven project configuration."""
-    pom_path = Path(repo_root) / "pom.xml"
+@tool
+def read_pom_xml(repo_path: str) -> str:
+    """Parse pom.xml (Java/Maven)."""
+    pom_path = Path(repo_path) / "pom.xml"
     if not pom_path.exists():
-        return {"found": False, "message": "pom.xml not found"}
+        return json.dumps({"found": False, "message": "pom.xml not found"}, indent=2)
 
     try:
         tree = ET.parse(pom_path)
@@ -379,15 +384,16 @@ def parse_maven_pom(repo_root: str) -> dict[str, Any]:
                     plugins.append(artifact_id.text)
 
         analysis["plugins"] = plugins
-        return analysis
+        return json.dumps(analysis, indent=2)
     except Exception as e:
         logger.error(f"Error parsing pom.xml: {str(e)}")
-        return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(pom_path)}
+        return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(pom_path)}, indent=2)
 
 
-def parse_gradle_build(repo_root: str) -> dict[str, Any]:
-    """Parse build.gradle to extract Gradle project configuration."""
-    gradle_files = [Path(repo_root) / f for f in ["build.gradle", "build.gradle.kts"]]
+@tool
+def read_build_gradle(repo_path: str) -> str:
+    """Parse build.gradle (Java/Gradle)."""
+    gradle_files = [Path(repo_path) / f for f in ["build.gradle", "build.gradle.kts"]]
 
     for gradle_path in gradle_files:
         if gradle_path.exists():
@@ -403,22 +409,23 @@ def parse_gradle_build(repo_root: str) -> dict[str, Any]:
                 dependencies = list(set(re.findall(dep_pattern, content)))
                 analysis["dependencies"] = dependencies
 
-                prop_pattern = r'(\w+)\s*=\s*["\']([^"\']+)["\']'
+                prop_pattern = r'(\w+)\s*=\s+["\']([^"\']+)["\']'
                 analysis["properties"] = dict(re.findall(prop_pattern, content))
 
-                return analysis
+                return json.dumps(analysis, indent=2)
             except Exception as e:
                 logger.error(f"Error parsing {gradle_path}: {str(e)}")
-                return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(gradle_path)}
+                return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(gradle_path)}, indent=2)
 
-    return {"found": False, "message": "build.gradle files not found"}
+    return json.dumps({"found": False, "message": "build.gradle files not found"}, indent=2)
 
 
-def parse_go_mod(repo_root: str) -> dict[str, Any]:
-    """Parse go.mod to extract Go module configuration."""
-    go_mod_path = Path(repo_root) / "go.mod"
+@tool
+def read_go_mod(repo_path: str) -> str:
+    """Parse go.mod (Go)."""
+    go_mod_path = Path(repo_path) / "go.mod"
     if not go_mod_path.exists():
-        return {"found": False, "message": "go.mod not found"}
+        return json.dumps({"found": False, "message": "go.mod not found"}, indent=2)
 
     try:
         content = go_mod_path.read_text()
@@ -452,17 +459,18 @@ def parse_go_mod(repo_root: str) -> dict[str, Any]:
                         dependencies.append(f"{parts[0]}@{parts[1]}")
 
         analysis["dependencies"] = dependencies
-        return analysis
+        return json.dumps(analysis, indent=2)
     except Exception as e:
         logger.error(f"Error parsing go.mod: {str(e)}")
-        return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(go_mod_path)}
+        return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(go_mod_path)}, indent=2)
 
 
-def parse_cargo_toml(repo_root: str) -> dict[str, Any]:
-    """Parse Cargo.toml to extract Rust project configuration."""
-    cargo_path = Path(repo_root) / "Cargo.toml"
+@tool
+def read_cargo_toml(repo_path: str) -> str:
+    """Parse Cargo.toml (Rust)."""
+    cargo_path = Path(repo_path) / "Cargo.toml"
     if not cargo_path.exists():
-        return {"found": False, "message": "Cargo.toml not found"}
+        return json.dumps({"found": False, "message": "Cargo.toml not found"}, indent=2)
 
     try:
         import tomllib
@@ -471,7 +479,7 @@ def parse_cargo_toml(repo_root: str) -> dict[str, Any]:
             import tomli as tomllib
         except ImportError:
             logger.warning("tomli not available")
-            return {"found": True, "error": "TOML parser not available", "path": str(cargo_path)}
+            return json.dumps({"found": True, "error": "TOML parser not available", "path": str(cargo_path)}, indent=2)
 
     try:
         with open(cargo_path, "rb") as f:
@@ -488,102 +496,7 @@ def parse_cargo_toml(repo_root: str) -> dict[str, Any]:
         analysis["dependencies"] = list(data.get("dependencies", {}).keys())
         analysis["dev_dependencies"] = list(data.get("dev-dependencies", {}).keys())
         analysis["build_dependencies"] = list(data.get("build-dependencies", {}).keys())
-        return analysis
+        return json.dumps(analysis, indent=2)
     except Exception as e:
         logger.error(f"Error parsing Cargo.toml: {str(e)}")
-        return {"found": True, "error": f"Failed to parse: {str(e)}", "path": str(cargo_path)}
-
-
-# ============================================================================
-# Tool Functions with @tool Decorator
-# ============================================================================
-
-@tool
-def list_repo_config_files(repo_path: str) -> str:
-    """List all configuration files found in repository root."""
-    result = list_config_files(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def analyze_repo_structure(repo_path: str) -> str:
-    """Analyze repository directory structure to identify project type."""
-    result = analyze_directory_structure(repo_path, max_depth=3)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def check_git_config(repo_path: str) -> str:
-    """Detect and analyze Git configuration."""
-    result = detect_git_config(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_package_json(repo_path: str) -> str:
-    """Parse package.json (Node.js/JavaScript)."""
-    result = parse_package_json(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_requirements_txt(repo_path: str) -> str:
-    """Parse requirements.txt files (Python)."""
-    result = parse_requirements_txt(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_pyproject_toml(repo_path: str) -> str:
-    """Parse pyproject.toml (Modern Python)."""
-    result = parse_pyproject_toml(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_dockerfile(repo_path: str) -> str:
-    """Parse Dockerfile for container configuration."""
-    result = parse_dockerfile(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_docker_compose(repo_path: str) -> str:
-    """Parse docker-compose.yml for multi-container setup."""
-    result = parse_docker_compose(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_env_files(repo_path: str) -> str:
-    """Parse .env files for environment configuration."""
-    result = parse_dotenv(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_pom_xml(repo_path: str) -> str:
-    """Parse pom.xml (Java/Maven)."""
-    result = parse_maven_pom(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_build_gradle(repo_path: str) -> str:
-    """Parse build.gradle (Java/Gradle)."""
-    result = parse_gradle_build(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_go_mod(repo_path: str) -> str:
-    """Parse go.mod (Go)."""
-    result = parse_go_mod(repo_path)
-    return json.dumps(result, indent=2)
-
-
-@tool
-def read_cargo_toml(repo_path: str) -> str:
-    """Parse Cargo.toml (Rust)."""
-    result = parse_cargo_toml(repo_path)
-    return json.dumps(result, indent=2)
+        return json.dumps({"found": True, "error": f"Failed to parse: {str(e)}", "path": str(cargo_path)}, indent=2)

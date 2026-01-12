@@ -11,6 +11,14 @@ from tools.behavior import (
     extract_code_documentation,
     identify_code_patterns,
 )
+from tools.component import (
+    analyze_classes,
+    analyze_component_boundaries,
+    analyze_inheritance_hierarchy,
+    analyze_module_structure,
+    analyze_public_apis,
+    analyze_service_architecture,
+)
 from tools.environment import (
     analyze_repo_structure,
     check_git_config,
@@ -52,4 +60,11 @@ __all__ = [
     "detect_performance_bottlenecks",
     "extract_code_documentation",
     "analyze_code_complexity",
+    # Component tools
+    "analyze_classes",
+    "analyze_module_structure",
+    "analyze_public_apis",
+    "analyze_component_boundaries",
+    "analyze_inheritance_hierarchy",
+    "analyze_service_architecture",
 ]
