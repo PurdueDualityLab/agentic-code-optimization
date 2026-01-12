@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Agentic Code Optimizer** is a LangGraph-based multi-agent framework for code optimization. It provides a declarative system for building AI agents that analyze and optimize code across multiple languages using pluggable LLM providers (Ollama, OpenAI, Anthropic).
 
-**Current Status**: Framework complete, agents awaiting implementation.
+**Current Status**: Framework complete with working agents, logging, metrics tracking, and run management.
 
 ## Architecture
 
@@ -31,9 +31,11 @@ Output: Optimized Code + Recommendations
 
 **`agents/` - Agent Framework**
 - `base.py`: `BaseAgent` abstract class implementing declarative pattern with `__new__` processing
-- Manages agentic loop: Think → Tool Use → Observe
-- Handles tool binding, execution, state tracking
-- `AgentState`: Tracks messages, tool results, iterations, status
+- Manages agentic loop using LangGraph: Think (LLM Call) → Tool Use → Observe
+- Synchronous execution (not async) for better logging and visibility
+- Handles tool binding, execution, state tracking, iteration counting
+- Tracks: `iteration_count` (LLM calls only), `tools_used_count` (total tool executions), `tools_used_names` (unique tools)
+- Built-in logging at INFO level for major steps, DEBUG level for detailed state inspection
 
 **`providers/` - LLM Provider Abstraction**
 - `base.py`: `BaseProvider` abstract class and `ProviderResponse` format
@@ -46,17 +48,55 @@ Output: Optimized Code + Recommendations
 - `base.py`: `SubSectionParser` ABC for dataclass-based config
 - `providers.py`: Config dataclasses for each provider (`OllamaConfig`, `OpenAIConfig`, `AnthropicConfig`)
 
+**`tools/` - Code Analysis Tools**
+- `behavior.py`: Analyzes code behavior, logic, patterns, and execution flow
+- `component.py`: Identifies structure, functions, classes, and components
+- `environment.py`: Analyzes dependencies, imports, and environment setup
+
+**`utils/` - Utilities (NEW)**
+- `metrics.py`: `ExecutionMetrics`, `Trace`, `ObservabilityManager` for execution tracking
+- `runs.py`: `RunManager` for managing execution artifacts and run directories
+
+### Execution Flow & Run Management
+
+When you run `python evaluate.py`:
+
+1. **Run Directory Created**: `runs/{agent_name}_{YYYYMMDD_HHMMSS}/`
+2. **Artifacts Saved**:
+   - `config.ini` - Copy of configuration used
+   - `input.txt` - Execution parameters (timestamp, agent, repo path, etc.)
+   - `response.txt` - Complete agent response
+   - `metrics.json` - Execution metrics (LLM iterations, tools used, timing, provider)
+   - `state.json` - Agent state snapshot (messages count, tools used, LangGraph output)
+   - `summary.md` - Human-readable markdown summary
+
+### Logging System
+
+- **Backend**: Beautilog (logs to console + file simultaneously)
+- **Log Files**: `logs/agent.log` and `logs/evaluate.log`
+- **Levels**:
+  - **INFO**: Major steps (agent start/end, LLM calls, tool execution, graph compilation)
+  - **DEBUG**: Detailed state inspection (state dicts, messages, tool results)
+  - **ERROR**: Failures and exceptions with full traceback
+
 ### State Flow for LangGraph
 
-Agent execution returns state updates in format:
+Agent execution in `run()` method:
+1. Creates `StateGraph(MessagesState)` with LLM call and tool nodes
+2. Routes based on whether LLM generated tool calls
+3. Returns state in format:
 ```python
 {
     "return_state_field": result,  # From agent.return_state_field
-    # ... other state fields
+    "return_state_field_state": {
+        "messages": [...],         # Full message history
+        "iterations": count,       # LLM call count
+        "tools_used_count": total, # Total tool executions
+        "tools_used_names": [...], # List of tools used
+        "unique_tools_count": n    # Count of unique tools
+    }
 }
 ```
-
-Agents are designed as LangGraph nodes with state-compatible outputs.
 
 ## Common Development Tasks
 
@@ -69,43 +109,43 @@ source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
-pip install -e .
 
 # Set up config
+# Copy .env.example to .env and fill in API keys
+cp .env.example .env
 # Edit config.ini with provider settings
-# Create .env for API keys: OPENAI_API_KEY, ANTHROPIC_API_KEY
 ```
 
 ### Code Quality Commands
 
 ```bash
 # Format code
-black src/ tests/
+black agents/ config/ providers/ tools/ utils/ evaluate.py
 
 # Lint
-ruff check src/ tests/
+ruff check agents/ config/ providers/ tools/ utils/ evaluate.py
 
 # Type check
-mypy src/
+mypy agents/ config/ providers/ tools/ utils/ evaluate.py
 
 # All checks together
-black src/ tests/ && ruff check src/ tests/ && mypy src/
+black agents/ config/ providers/ tools/ utils/ evaluate.py && \
+ruff check agents/ config/ providers/ tools/ utils/ evaluate.py && \
+mypy agents/ config/ providers/ tools/ utils/ evaluate.py
 ```
 
-### Testing
+### Running the Evaluation
 
 ```bash
-# Run all tests
-pytest tests/
+# Run on current project
+python evaluate.py
 
-# Run specific test
-pytest tests/test_base_agent.py::TestAgentCreation
+# Run on specific repository
+python evaluate.py /path/to/repo
 
-# With coverage
-pytest tests/ --cov=src/agentic_optimizer
-
-# Watch mode (requires pytest-watch)
-ptw tests/
+# View results
+ls -la runs/EnvironmentSummarizer_*/
+cat runs/EnvironmentSummarizer_*/summary.md
 ```
 
 ## Creating Custom Agents
@@ -116,7 +156,7 @@ from agents.base import BaseAgent
 from langchain_core.tools import tool
 
 @tool
-async def my_tool(code: str) -> str:
+def my_tool(code: str) -> str:
     """Tool description and usage."""
     return "result"
 
@@ -137,12 +177,12 @@ class MyOptimizationAgent(BaseAgent):
 
 **Using the Agent:**
 ```python
+from agents import BaseAgent
+
 agent = MyOptimizationAgent()
-result = await agent.execute(
-    code="...",
-    user_input="Optimize this"
-)
-# result["my_results"] contains output
+result = agent.run("code to analyze")  # Synchronous
+# result contains the final response
+# Access metrics via: agent.iteration_count, agent.tools_used_count
 ```
 
 ## Creating Custom Providers
@@ -151,6 +191,7 @@ result = await agent.execute(
 from providers.base import BaseProvider, ProviderResponse
 from providers.registry import ProviderRegistry
 from config.base import SubSectionParser
+from dataclasses import dataclass
 
 # 1. Define config
 @dataclass
@@ -165,7 +206,7 @@ class CustomProvider(BaseProvider):
     def __init__(self, config: CustomConfig):
         self.config = config
 
-    async def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> ProviderResponse:
+    def generate(self, system_prompt: str, user_prompt: str, **kwargs) -> ProviderResponse:
         # Implementation
         return ProviderResponse(
             content="...",
@@ -173,7 +214,7 @@ class CustomProvider(BaseProvider):
             usage={"tokens": 0}
         )
 
-    async def validate_connection(self) -> bool:
+    def validate_connection(self) -> bool:
         # Connection validation
         pass
 
@@ -191,11 +232,50 @@ ProviderRegistry.register("custom", CustomProvider, CustomConfig)
 
 ## Configuration
 
+**`.env` File Format:**
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_ORGANIZATION_ID=org-...
+
+# Anthropic Claude
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Ollama (typically no API key needed, runs locally)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=devstral-2:123b
+
+# Logging
+LOG_LEVEL=INFO
+
+# Application
+DEFAULT_PROVIDER=ollama
+MAX_ITERATIONS=30
+TIMEOUT=60
+VERBOSE=true
+```
+
 **`config.ini` Format:**
 ```ini
-[section_name]
-field1 = value1
-field2 = value2
+[agents]
+max_iterations = 30
+default_provider = ollama
+temperature = 0.7
+
+[ollama]
+base_url = http://localhost:11434
+model = devstral-2:123b
+temperature = 0.7
+
+[openai]
+api_key = ${OPENAI_API_KEY}
+model = gpt-5
+temperature = 0.7
+
+[anthropic]
+api_key = ${ANTHROPIC_API_KEY}
+model = claude-3-5-sonnet-20241022
+temperature = 0.7
 ```
 
 **Loading:**
@@ -214,18 +294,24 @@ config = ConfigParser.get(OllamaConfig)
 **Declarative Agents**: Class attributes define behavior; `__new__` validates and binds tools
 **Factory Pattern**: `ProviderRegistry` creates providers from config
 **Configuration Pattern**: Dataclass-based config with INI mapping via `SubSectionParser`
-**Agentic Loop**: Iterative refinement (Think → Tool Use → Observe) with max iteration limits
-**State Management**: `AgentState` tracks execution; conversions for LangGraph integration
+**Agentic Loop**: LangGraph-based workflow (Think → Tool Use → Observe) with max iteration limits
+**State Management**: Message-based state; conversions for LangGraph integration
+**Run Management**: `RunManager` handles execution artifacts and directory organization
+**Logging**: Beautilog for beautiful terminal + file logging simultaneously
 
 ## Important Files
 
 | File | Purpose |
 |------|---------|
-| `agents/base.py` | Core agent framework with declarative pattern |
+| `agents/base.py` | Core agent framework with LangGraph integration |
+| `agents/summarizers/` | Specialized summarizer agents |
 | `providers/registry.py` | Provider factory and management |
 | `config/parser.py` | Configuration loading system |
-| `config.ini` | Provider configuration and defaults |
-| `pyproject.toml` | Dependencies, tool config (black, ruff, mypy, pytest) |
+| `utils/runs.py` | Run directory and artifact management |
+| `utils/metrics.py` | Execution metrics and observability |
+| `evaluate.py` | Main evaluation/execution script |
+| `config.ini` | Provider configuration |
+| `.env.example` | Environment variables template |
 | `requirements.txt` | Pinned dependencies |
 
 ## Dependencies
@@ -233,14 +319,30 @@ config = ConfigParser.get(OllamaConfig)
 **Core**: `langgraph`, `langchain`, `langchain-core`
 **Providers**: `httpx` (Ollama), `openai`, `anthropic`
 **Configuration**: `pydantic`, `python-dotenv`, `pyyaml`
+**Logging**: `beautilog`
 **Development**: `pytest`, `pytest-asyncio`, `black`, `ruff`, `mypy`
 
-## Notes
+## Important Notes
 
-- All agent classes must inherit from `BaseAgent` (imported as `Agent` in many places, check `agents/__init__.py`)
+- All agent classes must inherit from `BaseAgent`
+- Agent `run()` method is **synchronous** (not async) for better logging visibility
 - Tools use `@tool` decorator from `langchain_core.tools`
 - Configuration lazy-loads on first access via `ConfigParser.get()`
-- Providers support both sync and async, detected automatically
-- Use `await agent.execute()` for async execution
-- Agent state includes iteration count and max iteration enforcement
+- Iteration count only increments on **LLM calls**, not tool executions
+- Tools used are tracked in `tools_used_count` (total) and `tools_used_names` (unique)
+- Every execution creates a run directory with full artifacts for reproducibility
+- Beautilog logs to both terminal (colored) and file simultaneously
+- Use `logger.debug()` for detailed state inspection during development
 - Return state field is configurable per agent via `return_state_field` class attribute
+
+## Recent Changes (2025-01-12)
+
+- ✅ Consolidated `agentic_logging/` and `observability/` modules into `utils/`
+- ✅ Replaced async execution with synchronous `run()` for better logging
+- ✅ Added comprehensive debug logging for state inspection
+- ✅ Implemented `RunManager` for execution artifact management
+- ✅ Added metrics tracking: `tools_used_count`, `iteration_count` (LLM calls only), `tools_used_names`
+- ✅ Integrated beautilog for beautiful terminal + file logging
+- ✅ Created run directory structure with config, input, response, metrics, state, summary
+- ✅ Removed unused `callbacks/` module
+- ✅ Created `.env.example` for easy setup
