@@ -67,3 +67,6 @@ Thumbs.db
 # LLM Cache
 .ollama_cache/
 *.cache
+
+# Ignore specific files
+DeathStarBench/
