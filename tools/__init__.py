@@ -40,6 +40,12 @@ from tools.analysis import (
     load_static_analysis,
     read_code_snippet,
 )
+from tools.optimizer import (
+    apply_snippet_patch,
+    load_analysis_report,
+    load_summary_text,
+    preview_snippet_patch,
+)
 
 __all__ = [
     # Environment tools
@@ -78,4 +84,9 @@ __all__ = [
     "load_static_analysis",
     "build_analysis_bundle",
     "read_code_snippet",
+    # Optimizer tools
+    "load_analysis_report",
+    "load_summary_text",
+    "preview_snippet_patch",
+    "apply_snippet_patch",
 ]
