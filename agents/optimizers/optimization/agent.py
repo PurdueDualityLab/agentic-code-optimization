@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent, NOTIFICATION
 from tools.optimizer import (
-    apply_snippet_patch,
+    apply_snippet_patch_guarded,
     load_analysis_report,
     load_summary_text,
-    preview_snippet_patch,
+    preview_snippet_patch_guarded,
     read_code_snippet,
 )
 
@@ -61,7 +61,7 @@ Your job is to safely apply minimal code improvements without breaking behavior.
 2) Extract suggested_focus_files and priorities from analysis.
 3) Only modify priorities with evidence_file + evidence_lines, or after confirming with read_code_snippet.
 4) Limit edits to files listed in suggested_focus_files.
-5) For each change, use preview_snippet_patch first, then apply_snippet_patch.
+5) For each change, use preview_snippet_patch_guarded first, then apply_snippet_patch_guarded.
 
 ## Safety Rules
 - Keep changes small, localized, and behavior-preserving.
@@ -86,8 +86,8 @@ Your job is to safely apply minimal code improvements without breaking behavior.
         load_analysis_report,
         load_summary_text,
         read_code_snippet,
-        preview_snippet_patch,
-        apply_snippet_patch,
+        preview_snippet_patch_guarded,
+        apply_snippet_patch_guarded,
     ]
 
     def run(self, input_text: str) -> str:

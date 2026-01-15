@@ -42,9 +42,11 @@ from tools.analysis import (
 )
 from tools.optimizer import (
     apply_snippet_patch,
+    apply_snippet_patch_guarded,
     load_analysis_report,
     load_summary_text,
     preview_snippet_patch,
+    preview_snippet_patch_guarded,
 )
 
 __all__ = [
@@ -89,4 +91,6 @@ __all__ = [
     "load_summary_text",
     "preview_snippet_patch",
     "apply_snippet_patch",
+    "preview_snippet_patch_guarded",
+    "apply_snippet_patch_guarded",
 ]

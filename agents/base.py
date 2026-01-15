@@ -9,6 +9,7 @@ This module provides a declarative agent framework where:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Literal
@@ -135,7 +136,19 @@ class BaseAgent:
                             f"Tool {idx}/{len(last_message.tool_calls)}: "
                             f"Executing '{tool_name}'"
                         )
-                        observation = tool.invoke(tool_call["args"])
+                        try:
+                            observation = tool.invoke(tool_call["args"])
+                        except Exception as exc:
+                            if hasattr(tool, "ainvoke"):
+                                try:
+                                    observation = asyncio.run(tool.ainvoke(tool_call["args"]))
+                                except RuntimeError:
+                                    self.logger.error(
+                                        f"Tool '{tool_name}' async invoke failed (event loop running)."
+                                    )
+                                    raise exc
+                            else:
+                                raise
                         self.logger.log(TOOL_CALL, f"Tool observation: {observation}")
                         results.append(
                             ToolMessage(
