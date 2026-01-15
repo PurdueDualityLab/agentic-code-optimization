@@ -34,6 +34,12 @@ from tools.environment import (
     read_pom_xml,
     read_requirements_txt,
 )
+from tools.analysis import (
+    build_analysis_bundle,
+    load_environment_summary,
+    load_static_analysis,
+    read_code_snippet,
+)
 
 __all__ = [
     # Environment tools
@@ -67,4 +73,9 @@ __all__ = [
     "analyze_component_boundaries",
     "analyze_inheritance_hierarchy",
     "analyze_service_architecture",
+    # Analysis tools
+    "load_environment_summary",
+    "load_static_analysis",
+    "build_analysis_bundle",
+    "read_code_snippet",
 ]

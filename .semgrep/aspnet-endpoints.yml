@@ -1,0 +1,70 @@
+rules:
+  - id: aspnet-http-get-endpoint
+    patterns:
+      - pattern: |
+          [HttpGet(...)]
+          $RETURN $METHOD(...) { ... }
+    message: "Found HTTP GET endpoint: $METHOD"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: endpoint
+      http_method: GET
+
+  - id: aspnet-http-post-endpoint
+    patterns:
+      - pattern: |
+          [HttpPost(...)]
+          $RETURN $METHOD(...) { ... }
+    message: "Found HTTP POST endpoint: $METHOD"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: endpoint
+      http_method: POST
+
+  - id: aspnet-http-put-endpoint
+    patterns:
+      - pattern: |
+          [HttpPut(...)]
+          $RETURN $METHOD(...) { ... }
+    message: "Found HTTP PUT endpoint: $METHOD"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: endpoint
+      http_method: PUT
+
+  - id: aspnet-http-delete-endpoint
+    patterns:
+      - pattern: |
+          [HttpDelete(...)]
+          $RETURN $METHOD(...) { ... }
+    message: "Found HTTP DELETE endpoint: $METHOD"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: endpoint
+      http_method: DELETE
+
+  - id: aspnet-route-attribute
+    patterns:
+      - pattern: |
+          [Route($ROUTE)]
+          class $CONTROLLER : ControllerBase { ... }
+    message: "Found API controller: $CONTROLLER with route $ROUTE"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: controller
+
+  - id: aspnet-api-controller
+    patterns:
+      - pattern: |
+          [ApiController]
+          class $NAME : ControllerBase { ... }
+    message: "Found API controller: $NAME"
+    languages: [csharp]
+    severity: INFO
+    metadata:
+      category: controller

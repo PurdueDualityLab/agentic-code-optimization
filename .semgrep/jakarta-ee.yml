@@ -1,0 +1,33 @@
+rules:
+  - id: jakarta-persistence-database
+    patterns:
+      - pattern-either:
+          - pattern: EntityManager $EM = ...;
+          - pattern: private EntityManager $EM;
+      - pattern-inside: |
+          import jakarta.persistence.EntityManager;
+          ...
+    message: "Jakarta Persistence EntityManager detected"
+    languages: [java]
+    severity: INFO
+    metadata:
+      category: database
+      technology: jakarta-persistence
+      type: SQL
+      confidence: HIGH
+
+  - id: jakarta-jaxrs-http-client
+    patterns:
+      - pattern-either:
+          - pattern: WebTarget $T = ...;
+          - pattern: $CLIENT.target(...)
+      - pattern-inside: |
+          import jakarta.ws.rs.client.$X;
+          ...
+    message: "Jakarta JAX-RS Client detected"
+    languages: [java]
+    severity: INFO
+    metadata:
+      category: http_client
+      technology: jakarta-jaxrs
+      confidence: MEDIUM

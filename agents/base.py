@@ -179,6 +179,12 @@ class BaseAgent:
         """Conditional edge - route based on whether LLM made tool calls."""
         last_message = state["messages"][-1]
 
+        if self.iteration_count >= self.max_iterations:
+            self.logger.info(
+                "Max iterations reached; stopping agent loop"
+            )
+            return END
+
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tool_node"
 
@@ -223,7 +229,11 @@ class BaseAgent:
         self.logger.info("Invoking compiled graph")
         initial_messages = [HumanMessage(content=input_text)]
         self.logger.log(NOTIFICATION, f"Initial messages: {initial_messages}")
-        result = compiled_graph.invoke({"messages": initial_messages})
+        recursion_limit = max(25, self.max_iterations * 2 + 5)
+        result = compiled_graph.invoke(
+            {"messages": initial_messages},
+            config={"recursion_limit": recursion_limit},
+        )
 
         # Extract final response
         self.logger.info("Graph execution completed")
