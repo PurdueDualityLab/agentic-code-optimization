@@ -189,7 +189,7 @@ def read_code_snippet(
 def build_analysis_bundle(
     summary_source: str,
     static_source: str,
-    max_items: int = 20,
+    max_items: int = 12,
     max_excerpt_chars: int = 0,
 ) -> str:
     """Build a compact analysis bundle from summary text and static analysis JSON."""
