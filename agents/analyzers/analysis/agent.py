@@ -24,11 +24,21 @@ class PriorityItem(BaseModel):
     title: str = Field(description="Short priority title")
     rationale: str = Field(description="Why this matters in the system")
     evidence: str = Field(description="Evidence anchored in snippets or bundle counts")
-    evidence_file: Optional[str] = Field(default=None, description="Repo-relative file path for the evidence")
-    evidence_lines: Optional[str] = Field(default=None, description="Line range for the evidence, e.g. '120-168'")
-    evidence_snippet: Optional[str] = Field(default=None, description="Short code snippet if read_code_snippet was used")
-    change_scope: Optional[List[str]] = Field(default=None, description="Functions/modules intended to change")
-    needs_inspection: Optional[bool] = Field(default=None, description="True if priority lacks concrete evidence")
+    evidence_file: Optional[str] = Field(
+        default=None, description="Repo-relative file path for the evidence"
+    )
+    evidence_lines: Optional[str] = Field(
+        default=None, description="Line range for the evidence, e.g. '120-168'"
+    )
+    evidence_snippet: Optional[str] = Field(
+        default=None, description="Short code snippet if read_code_snippet was used"
+    )
+    change_scope: Optional[List[str]] = Field(
+        default=None, description="Functions/modules intended to change"
+    )
+    needs_inspection: Optional[bool] = Field(
+        default=None, description="True if priority lacks concrete evidence"
+    )
     impact: str = Field(description="Expected impact (qualitative)")
     confidence: str = Field(description="Confidence level (e.g., low/medium/high)")
 
@@ -98,22 +108,17 @@ actionable optimization guidance for a downstream optimizer agent.
 ## Decision Rules
 - Prioritize changes that reduce latency, CPU, memory, or tail latency in service calls.
 - Highlight chatty HTTP usage, repeated serialization, and excessive logging in hot paths.
-- Only propose security-related work if bundle.security_summary.total > 0.
 - If endpoints are not detected, do not infer endpoint behavior; note the gap.
 - If tools are missing or coverage is low, lower confidence explicitly.
-- Do not include profiling/tracing in priorities; keep it in next_steps unless there is no other actionable evidence.
-- Treat bundle.static.repository.language_counts as file counts, not lines of code.
 
 ## Output Constraints
-- Keep output concise and under roughly 1200 tokens.
-- Limits: priorities 3-5, risks_and_gaps 3-4, suggested_focus_files 5-8, data_dependencies 4-6, next_steps 5-7, optimizer_constraints 2-4.
-- Keep each string field to 1-2 short sentences; avoid repeated global counts across items.
 - suggested_focus_files[].file must be a concrete repo-relative file path (no descriptions, no globs, no directories).
 - Prefer paths taken from bundle.static.candidate_files or snippet evidence.
 - If you cannot name a concrete file path, omit the entry.
 - If you used read_code_snippet, include evidence_file and evidence_lines for that priority.
 - Only include evidence_snippet when it comes from read_code_snippet.
-- If evidence_file or evidence_lines are missing, set needs_inspection = true for that priority.
+- Only include priorities that have evidence_file and evidence_lines. If evidence is missing, move it to next_steps
+  prefixed with "needs_inspection:" and omit it from priorities.
 - Add optimizer_constraints:
   - Only modify priorities that include evidence_file and evidence_lines, or after confirming with read_code_snippet.
   - Limit edits to files listed in suggested_focus_files.
@@ -185,7 +190,10 @@ Keys:
         ]
         if isinstance(payload, dict):
             priorities = payload.get("priorities")
+            next_steps = payload.get("next_steps")
+            missing_titles: List[str] = []
             if isinstance(priorities, list):
+                kept = []
                 for item in priorities:
                     if not isinstance(item, dict):
                         continue
@@ -193,14 +201,42 @@ Keys:
                     evidence_lines = item.get("evidence_lines")
                     if not evidence_file or not evidence_lines:
                         item["needs_inspection"] = True
+                        title = str(item.get("title") or "").strip()
+                        if title:
+                            missing_titles.append(title)
+                        continue
+                    item["needs_inspection"] = False
+                    kept.append(item)
+                payload["priorities"] = kept
+
+            if missing_titles:
+                note = "needs_inspection: confirm before optimization — " + "; ".join(
+                    missing_titles
+                )
+                if not isinstance(next_steps, list):
+                    next_steps = []
+                if note not in next_steps:
+                    if len(next_steps) >= 7:
+                        next_steps[-1] = note
+                    else:
+                        next_steps.append(note)
+                payload["next_steps"] = next_steps
 
             existing_constraints = payload.get("optimizer_constraints") or []
             if isinstance(existing_constraints, list):
+
                 def _constraint_category(text: str) -> str:
                     lowered = text.lower()
-                    if "evidence_file" in lowered or "evidence lines" in lowered or "read_code_snippet" in lowered:
+                    if (
+                        "evidence_file" in lowered
+                        or "evidence lines" in lowered
+                        or "read_code_snippet" in lowered
+                    ):
                         return "evidence_required"
-                    if "suggested_focus_files" in lowered or "limit edits to files" in lowered:
+                    if (
+                        "suggested_focus_files" in lowered
+                        or "limit edits to files" in lowered
+                    ):
                         return "focus_files"
                     if "needs_inspection" in lowered:
                         return "needs_inspection"

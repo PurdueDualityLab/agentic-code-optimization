@@ -40,8 +40,7 @@ class OptimizationReport(BaseModel):
 
     applied_changes: List[AppliedChange]
     skipped_priorities: List[SkippedPriority]
-    risks: List[str]
-    next_steps: List[str]
+    risks: List[str] = Field(description="Short risks introduced or remaining")
 
 
 class OptimizerAgent(BaseAgent):
@@ -54,7 +53,7 @@ Input is JSON with:
 - analysis_source: path to analysis JSON
 - root_path: repository root
 
-Your job is to safely apply minimal code improvements without breaking behavior.
+Your job is to safely apply code improvements without breaking behavior.
 
 ## Mandatory Workflow
 1) Call load_analysis_report(analysis_source) first.
@@ -64,18 +63,14 @@ Your job is to safely apply minimal code improvements without breaking behavior.
 5) For each change, use preview_snippet_patch_guarded first, then apply_snippet_patch_guarded.
 
 ## Safety Rules
-- Keep changes small, localized, and behavior-preserving.
-- Avoid API/schema changes, protocol changes, or large refactors.
-- Prefer timeouts, logging reductions, or small control-flow improvements.
+- Avoid API/schema changes, protocol changes.
 - If you cannot confirm a change from snippets, skip it and explain why.
-- Apply at most 1 change per run and stop after the first successful apply.
 - If preview_snippet_patch fails (not found or not unique), skip the priority.
 
 ## Output Format (JSON only)
 - applied_changes: list of {file, summary, diff, applied}
 - skipped_priorities: list of {title, reason}
 - risks: list of short risks introduced or remaining
-- next_steps: list of follow-up actions
 """
 
     return_state_field = "optimization_report"
