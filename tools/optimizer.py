@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
 
-from tools.analysis import read_code_snippet
+from tools.analysis import read_code_snippet, read_file
 
 
 def _read_text(source: str) -> str:

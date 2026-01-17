@@ -134,13 +134,41 @@ def _candidate_files(
 
 @tool
 async def load_environment_summary(summary_source: str) -> str:
-    """Load environment/component/behavior summary text from path or raw text."""
+    """Load environment/component/behavior summary text from a file or return raw text.
+
+    Args:
+        summary_source (str): **REQUIRED** Either a file path to a summary file (e.g., "summary.txt") or raw summary text
+
+    Returns:
+        str: The summary text content
+
+    Examples:
+        # Load from file path
+        load_environment_summary(summary_source="/tmp/summary.txt")
+
+        # Use raw text directly
+        load_environment_summary(summary_source="This is a summary...")
+    """
     return _read_text(summary_source)
 
 
 @tool
 async def load_static_analysis(static_source: str) -> str:
-    """Load static analysis JSON from path or raw JSON string."""
+    """Load static analysis results from a JSON file or parse raw JSON string.
+
+    Args:
+        static_source (str): **REQUIRED** Either a file path to a JSON file (e.g., "analysis.json") or raw JSON string
+
+    Returns:
+        str: JSON string containing static analysis results
+
+    Examples:
+        # Load from file path
+        load_static_analysis(static_source="/tmp/analysis.json")
+
+        # Parse raw JSON
+        load_static_analysis(static_source='{"signals": [], "hotspots": []}')
+    """
     data = _read_json(static_source)
     return json.dumps(data)
 
@@ -153,7 +181,28 @@ async def read_code_snippet(
     max_lines: int = 200,
     max_chars: int = 4000,
 ) -> str:
-    """Read a bounded snippet from a file. Returns JSON with snippet and metadata."""
+    """Read a bounded snippet from a file in the codebase.
+
+    Args:
+        file_path (str): **REQUIRED** Path to the file to read (e.g., "src/main.py", "agents/base.py")
+        root_path (str): Root directory path. Use this if file_path is relative. Defaults to current directory.
+        start_line (int): Line number to start reading from (1-indexed). Default: 1
+        max_lines (int): Maximum number of lines to read (1-400). Default: 200
+        max_chars (int): Maximum characters to return (200-8000). Default: 4000
+
+    Returns:
+        str: JSON string with format: {"file": "absolute/path", "start_line": 1, "end_line": 200, "total_lines": 500, "snippet": "file contents..."}
+
+    Examples:
+        # Read first 200 lines of a file
+        read_code_snippet(file_path="agents/base.py")
+
+        # Read specific section of a file
+        read_code_snippet(file_path="src/main.py", start_line=50, max_lines=100)
+
+        # Read with custom character limit
+        read_code_snippet(file_path="config.ini", max_chars=1000)
+    """
     max_lines = max(1, min(max_lines, MAX_SNIPPET_LINES))
     max_chars = max(200, min(max_chars, MAX_SNIPPET_CHARS))
     start_line = max(1, start_line)
@@ -197,6 +246,45 @@ async def read_code_snippet(
 
 
 @tool
+async def read_file(
+    file_path: str,
+    root_path: str = "",
+    start_line: int = 1,
+    max_lines: int = 200,
+) -> str:
+    """Read contents of a file from the codebase.
+
+    This is an alias for read_code_snippet with a more intuitive name.
+    Use this when you want to read file contents for analysis or inspection.
+
+    Args:
+        file_path (str): **REQUIRED** Path to the file to read (e.g., "src/main.py", "config.ini")
+        root_path (str): Root directory path. Use this if file_path is relative. Defaults to current directory.
+        start_line (int): Line number to start reading from (1-indexed). Default: 1
+        max_lines (int): Maximum number of lines to read. Default: 200
+
+    Returns:
+        str: JSON string with format: {"file": "absolute/path", "start_line": 1, "end_line": 200, "total_lines": 500, "snippet": "file contents..."}
+
+    Examples:
+        # Read entire file (up to max_lines)
+        read_file(file_path="agents/base.py")
+
+        # Read specific section of a file
+        read_file(file_path="src/main.py", start_line=50, max_lines=100)
+
+        # Read configuration file
+        read_file(file_path="config.ini", root_path="/path/to/project")
+    """
+    return await read_code_snippet(
+        file_path=file_path,
+        root_path=root_path,
+        start_line=start_line,
+        max_lines=max_lines,
+    )
+
+
+@tool
 async def search_codebase(
     pattern: str,
     root_path: str = "",
@@ -205,7 +293,29 @@ async def search_codebase(
     ignore_case: bool = True,
     literal: bool = True,
 ) -> str:
-    """Search for a pattern in the codebase. Returns JSON with match locations."""
+    """Search for a text pattern in the codebase using ripgrep or regex.
+
+    Args:
+        pattern (str): **REQUIRED** The text pattern to search for (e.g., "def main", "TODO", "import json")
+        root_path (str): Root directory to search in. Defaults to current working directory.
+        file_glob (str): File pattern to filter results (e.g., "*.py", "**/*.go"). Leave empty to search all files.
+        max_results (int): Maximum number of results to return (1-200). Default: 50
+        ignore_case (bool): Whether to ignore case when searching. Default: True
+        literal (bool): Treat pattern as literal string (not regex). Default: True
+
+    Returns:
+        str: JSON string with format: {"matches": [{"file": "path/to/file.py", "line": 42, "text": "matched line"}], "truncated": bool}
+
+    Examples:
+        # Search for function definitions in Python files
+        search_codebase(pattern="def process_data", file_glob="*.py")
+
+        # Search for imports across entire codebase
+        search_codebase(pattern="import asyncio")
+
+        # Case-sensitive search for a constant
+        search_codebase(pattern="MAX_ITERATIONS", ignore_case=False)
+    """
     if not pattern:
         return json.dumps({"error": "empty_pattern"})
 
@@ -312,7 +422,27 @@ async def build_analysis_bundle(
     max_items: int = 12,
     max_excerpt_chars: int = 0,
 ) -> str:
-    """Build a compact analysis bundle from summary text and static analysis JSON."""
+    """Build a compact analysis bundle combining summary text and static analysis signals.
+
+    This tool merges environment/component/behavior summaries with static analysis findings
+    to create a comprehensive but compact view of the codebase for optimization analysis.
+
+    Args:
+        summary_source (str): **REQUIRED** Path to summary file or raw summary text
+        static_source (str): **REQUIRED** Path to static analysis JSON file or raw JSON string
+        max_items (int): Maximum number of items to include per category (hotspots, clients, etc.). Default: 12
+        max_excerpt_chars (int): Maximum characters for code excerpts (0=no excerpts). Default: 0
+
+    Returns:
+        str: Compact analysis bundle as formatted text combining all inputs
+
+    Examples:
+        # Build bundle with default settings
+        build_analysis_bundle(summary_source="/tmp/summary.txt", static_source="/tmp/analysis.json")
+
+        # Build bundle with more items and excerpts
+        build_analysis_bundle(summary_source="/tmp/summary.txt", static_source="/tmp/analysis.json", max_items=20, max_excerpt_chars=500)
+    """
     summary_text = _read_text(summary_source)
     static_data = _read_json(static_source)
 
@@ -486,6 +616,33 @@ async def build_analysis_bundle(
 
 @tool
 async def run_static_analysis(root_path: str, max_items: int = 200) -> str:
-    """Run static analysis tools on a codebase and return signals."""
+    """Run static analysis tools on a codebase to identify optimization opportunities.
+
+    Analyzes the codebase for:
+    - High cyclomatic complexity functions
+    - Code hotspots (frequently changed/large files)
+    - Import clients and dependencies
+    - Security findings
+    - Potential performance issues
+
+    Args:
+        root_path (str): **REQUIRED** Root directory path of the codebase to analyze
+        max_items (int): Maximum number of items to include per category. Default: 200
+
+    Returns:
+        str: JSON string with format: {
+            "signals": [{"id": "...", "severity": "...", "message": "...", "evidence": {...}}],
+            "hotspots": [{"file": "...", "score": ...}],
+            "clients": {"module": [...]},
+            "security": [...]
+        }
+
+    Examples:
+        # Run analysis on current project
+        run_static_analysis(root_path="/path/to/project")
+
+        # Run with limited items for faster results
+        run_static_analysis(root_path="/path/to/project", max_items=50)
+    """
     result = runner_static_analysis(root_path, max_items=max_items)
     return json.dumps(result, indent=2)

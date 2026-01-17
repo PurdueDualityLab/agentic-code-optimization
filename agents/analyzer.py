@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
 from tools.analysis import (build_analysis_bundle, load_environment_summary,
-                            read_code_snippet, run_static_analysis,
+                            read_code_snippet, read_file, run_static_analysis,
                             search_codebase)
 
 
@@ -147,5 +147,6 @@ Keys:
         load_environment_summary,
         run_static_analysis,
         read_code_snippet,
+        read_file,
         search_codebase,
     ]

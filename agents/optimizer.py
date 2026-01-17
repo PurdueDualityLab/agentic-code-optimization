@@ -10,7 +10,7 @@ from agents.base import BaseAgent
 from tools.analysis import search_codebase
 from tools.optimizer import (apply_snippet_patch_guarded, load_analysis_report,
                              load_summary_text, preview_snippet_patch_guarded,
-                             read_code_snippet)
+                             read_code_snippet, read_file)
 
 
 class AppliedChange(BaseModel):
@@ -85,6 +85,7 @@ Your job is to safely apply code improvements without breaking behavior.
         load_analysis_report,
         load_summary_text,
         read_code_snippet,
+        read_file,
         search_codebase,
         preview_snippet_patch_guarded,
         apply_snippet_patch_guarded,
