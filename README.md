@@ -24,9 +24,15 @@ Three specialized agents run in parallel to analyze different aspects of code:
 - **Behavior Summary Agent** - Understands code behavior, logic flow, and patterns
 - **Component Summary Agent** - Identifies structure, functions, classes, and components
 
-### Phase 2: Code Optimization (Sequential)
-- **Analyzer Agent** - Reviews summaries and identifies optimization opportunities
+### Phase 2: Static Analysis
+- **Static Analysis Tools** - Collects hotspots, client usage, and dependency signals
+
+### Phase 3: Code Optimization (Sequential)
+- **Analyzer Agent** - Reviews summaries + static signals to identify optimization opportunities
 - **Optimization Agent** - Applies optimizations based on analysis and generates improved code
+
+### Phase 4: Code Correctness Check
+- **Code Correctness Agent** - Verifies that applied changes preserve intended behavior
 
 ## Project Structure
 
@@ -35,6 +41,8 @@ agentic-code-optimization/
 ├── agents/                      # Agent framework
 │   ├── base.py                 # BaseAgent abstract class
 │   ├── __init__.py
+│   ├── checkers/               # Validation/checker agents
+│   │   └── code_correctness/   # Correctness check agent
 │   └── summarizers/            # Specialized summarizer agents
 │       ├── environment.py       # Environment Summary Agent
 │       ├── behavior.py          # Behavior Summary Agent
@@ -62,6 +70,7 @@ agentic-code-optimization/
 │   ├── runs.py                 # RunManager for artifact management
 │   └── __init__.py
 ├── evaluate.py                 # Main evaluation script
+├── evaluate_code_correctles.py # Full workflow + correctness check
 ├── config.ini                  # Configuration file
 ├── .env.example                # Environment variables template
 ├── CLAUDE.md                   # Claude Code guidance
@@ -141,6 +150,14 @@ python evaluate.py
 
 # Run on specific repository
 python evaluate.py /path/to/repo
+```
+
+### Complete Workflow Execution
+
+This runs: summary → static analysis → analysis → optimize → correctness.
+
+```bash
+venv/bin/python evaluate_code_correctles.py /path/to/repo
 ```
 
 **Python API:**
