@@ -34,6 +34,59 @@ Three specialized agents run in parallel to analyze different aspects of code:
 ### Phase 4: Code Correctness Check
 - **Code Correctness Agent** - Verifies that applied changes preserve intended behavior
 
+### Workflow Execution
+
+```
+┌─────────────────────────────────────────────┐
+│                 Input Code                  │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 1: SUMMARIZATION (Parallel)         │
+├─────────────────────────────────────────────┤
+│  Environment Summary Agent                  │
+│  Behavior Summary Agent                     │
+│  Component Summary Agent                    │
+│         (run simultaneously)                │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│     Combine Summaries                       │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 2: STATIC ANALYSIS                  │
+├─────────────────────────────────────────────┤
+│  Static Analysis Tools                      │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 3: OPTIMIZATION (Sequential)        │
+├─────────────────────────────────────────────┤
+│  Analyzer Agent                             │
+│    ↓                                        │
+│  Optimization Agent                         │
+│    ↓                                        │
+│  Update Repository                          │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 4: CORRECTNESS CHECK                │
+├─────────────────────────────────────────────┤
+│  Code Correctness Agent                     │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│ Optimized Code + Reports + Artifacts        │
+└─────────────────────────────────────────────┘
+```
+
 ## Project Structure
 
 ```
