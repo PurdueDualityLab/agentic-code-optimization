@@ -6,17 +6,14 @@ import json
 from typing import List, Optional
 
 from langchain.agents import create_agent
-from langchain.agents.middleware.model_call_limit import ModelCallLimitMiddleware
+from langchain.agents.middleware.model_call_limit import \
+    ModelCallLimitMiddleware
 from pydantic import BaseModel, Field
 
-from agents.base import BaseAgent, NOTIFICATION
-from tools.analysis import (
-    build_analysis_bundle,
-    load_environment_summary,
-    load_static_analysis,
-    read_code_snippet,
-    search_codebase,
-)
+from agents.base import NOTIFICATION, BaseAgent
+from tools.analysis import (build_analysis_bundle, load_environment_summary,
+                            read_code_snippet, run_static_analysis,
+                            search_codebase)
 
 
 class PriorityItem(BaseModel):
@@ -95,17 +92,18 @@ actionable optimization guidance for a downstream optimizer agent.
 
 Input is JSON with:
 - summary_source: path to summary text
-- static_source: path to static analysis JSON
-- root_path: repository root to use for snippet/search tools
+- root_path: repository root to use for analysis and snippet/search tools
 
 ## Analysis Approach
 1) Understand system context from the summaries (architecture, services, dependencies, infra).
-2) Review static signals (coverage, hotspots, client usage, dependencies, security).
-3) Identify optimization opportunities with clear evidence and expected impact.
-4) Prioritize by impact and confidence; note assumptions and gaps.
+2) Gather static signals by calling run_static_analysis(root_path) to get coverage, hotspots, dependencies.
+3) Review static signals (coverage, hotspots, client usage, dependencies, security).
+4) Identify optimization opportunities with clear evidence and expected impact.
+5) Prioritize by impact and confidence; note assumptions and gaps.
 
 ## Tool Usage Strategy
-- Call build_analysis_bundle(summary_source, static_source, max_items=12) first.
+- Call run_static_analysis(root_path) first to gather static analysis signals.
+- Then call build_analysis_bundle(summary_source, <result from run_static_analysis>, max_items=12) to combine summaries with signals.
 - Use bundle signals (hotspots, candidate files, coverage) to guide which code to inspect.
 - Prefer non-test paths; avoid prioritizing test-only hotspots unless no production paths exist.
 - Use search_codebase to locate concrete files/lines for high-impact patterns (e.g., async fan-out, redis usage, tracing).
@@ -150,7 +148,7 @@ Keys:
     tools = [
         build_analysis_bundle,
         load_environment_summary,
-        load_static_analysis,
+        run_static_analysis,
         read_code_snippet,
         search_codebase,
     ]

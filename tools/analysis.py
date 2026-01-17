@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
 
+from static_analisis_tools.runner import run_static_analysis
 
 MAX_SNIPPET_LINES = 400
 MAX_SNIPPET_CHARS = 8000

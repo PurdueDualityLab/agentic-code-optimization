@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from langchain_core.tools import tool
+
 from .config_analyzer import ConfigAnalyzer
 from .native_deps_analyzer import NativeDependencyAnalyzer
 from .noir_analyzer import NoirAnalyzer
@@ -149,8 +151,26 @@ def _service_inventory(configuration: Dict[str, Any], max_items: int) -> Dict[st
         },
     }
 
-
+@tool
 def run_static_analysis(root_path: str, max_items: int = 200) -> Dict[str, Any]:
+    """Run static analysis tools on a codebase and return signals.
+
+    Executes static analysis to gather metrics about code structure,
+    coverage, hotspots, dependencies, and other signals that inform
+    optimization priorities.
+
+    Args:
+        root_path: Path to the repository or code directory
+        max_items: Maximum number of items to include in results (default: 200)
+
+    Returns:
+        JSON string containing static analysis results with signals for:
+        - coverage metrics
+        - file hotspots
+        - dependency ecosystem
+        - candidate files for optimization
+    """
+
     start_time = time.time()
     root = Path(root_path).resolve()
 
