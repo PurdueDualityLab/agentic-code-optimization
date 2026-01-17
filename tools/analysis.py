@@ -201,6 +201,7 @@ def search_codebase(
     file_glob: str = "",
     max_results: int = 50,
     ignore_case: bool = True,
+    literal: bool = True,
 ) -> str:
     """Search for a pattern in the codebase. Returns JSON with match locations."""
     if not pattern:
@@ -218,6 +219,8 @@ def search_codebase(
         cmd = ["rg", "--no-heading", "--line-number", "--color", "never"]
         if ignore_case:
             cmd.append("-i")
+        if literal:
+            cmd.append("-F")
         if file_glob:
             cmd.extend(["-g", file_glob])
         cmd.append(pattern)
@@ -256,7 +259,11 @@ def search_codebase(
                 break
     else:
         flags = re.IGNORECASE if ignore_case else 0
-        regex = re.compile(pattern, flags=flags)
+        regex_pattern = re.escape(pattern) if literal else pattern
+        try:
+            regex = re.compile(regex_pattern, flags=flags)
+        except re.error as exc:
+            return json.dumps({"error": "invalid_regex", "detail": str(exc)})
         for path in root.rglob("*"):
             if not path.is_file():
                 continue
