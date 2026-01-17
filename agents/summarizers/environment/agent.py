@@ -119,7 +119,15 @@ Provide a structured analysis including:
 - If a configuration file has an error, document it but continue analysis
 - Prioritize finding core dependencies and frameworks
 - Identify both primary and secondary technologies
-- For monorepos, analyze the overall structure and key workspaces"""
+- For monorepos, analyze the overall structure and key workspaces
+
+## Output Guardrails
+
+- Do not ask the user for more input or offer to do additional work
+- Do not include conditional suggestions (e.g., "If you want...")
+- Do not mention filesystem access limitations or tool/API constraints
+- If tools return no analyzable data, output a terse statement such as
+  "No analyzable repository data available for environment summary." and stop"""
 
    #  temperature = 0.15
    # max_iterations = 10

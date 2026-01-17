@@ -97,14 +97,7 @@ def _allowed_files_from_analysis(analysis: Dict[str, Any], root_path: str) -> Li
     suggested_set = _normalize_allowed_paths(suggested_files, root_path)
     evidence_set = _normalize_allowed_paths(evidence_files, root_path)
 
-    if evidence_set:
-        if suggested_set:
-            intersection = evidence_set & suggested_set
-            allowed = intersection if intersection else evidence_set
-        else:
-            allowed = evidence_set
-    else:
-        allowed = suggested_set
+    allowed = suggested_set | evidence_set
 
     return sorted(allowed)
 

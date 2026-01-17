@@ -120,7 +120,15 @@ Provide a structured analysis including:
 - Pay attention to API design consistency
 - Identify clear component boundaries
 - Analyze service-oriented patterns if present
-- For large codebases, focus on the primary structure"""
+- For large codebases, focus on the primary structure
+
+## Output Guardrails
+
+- Do not ask the user for more input or offer to do additional work
+- Do not include conditional suggestions (e.g., "If you want...")
+- Do not mention filesystem access limitations or tool/API constraints
+- If tools return no analyzable data, output a terse statement such as
+  "No analyzable code available for component summary." and stop"""
 
    temperature = 0.3
    max_iterations = 6

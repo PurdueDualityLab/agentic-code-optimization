@@ -57,6 +57,7 @@ def analyze_node(state: AnalysisState) -> dict:
         payload = {
             "summary_source": str(summary_path),
             "static_source": str(static_path),
+            "root_path": state["code_path"],
         }
         result = agent.run(json.dumps(payload))
     return {"analysis_report": result}

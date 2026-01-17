@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -42,6 +44,13 @@ def _parse_summary_sections(text: str) -> Dict[str, List[str]]:
         if current is not None and line.strip():
             sections[current].append(line.strip())
     return sections
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except Exception:
+        return path.as_posix()
 
 
 def _add_signal(signals: List[Dict[str, Any]], signal_id: str, severity: str, message: str, evidence: Dict[str, Any]) -> None:
@@ -181,6 +190,106 @@ def read_code_snippet(
         "end_line": end_index,
         "total_lines": total_lines,
         "snippet": snippet,
+    }
+    return json.dumps(payload)
+
+
+@tool
+def search_codebase(
+    pattern: str,
+    root_path: str = "",
+    file_glob: str = "",
+    max_results: int = 50,
+    ignore_case: bool = True,
+) -> str:
+    """Search for a pattern in the codebase. Returns JSON with match locations."""
+    if not pattern:
+        return json.dumps({"error": "empty_pattern"})
+
+    root = Path(root_path).resolve() if root_path else Path.cwd().resolve()
+    if not root.exists():
+        return json.dumps({"error": "root_not_found", "root_path": str(root)})
+
+    max_results = max(1, min(max_results, 200))
+    results: List[Dict[str, Any]] = []
+    truncated = False
+
+    if shutil.which("rg"):
+        cmd = ["rg", "--no-heading", "--line-number", "--color", "never"]
+        if ignore_case:
+            cmd.append("-i")
+        if file_glob:
+            cmd.extend(["-g", file_glob])
+        cmd.append(pattern)
+        cmd.append(str(root))
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=str(root),
+                timeout=30,
+            )
+        except Exception as exc:
+            return json.dumps({"error": "rg_failed", "detail": str(exc)})
+
+        if proc.returncode not in (0, 1):
+            return json.dumps({"error": "rg_failed", "detail": proc.stderr.strip()})
+
+        for line in proc.stdout.splitlines():
+            parts = line.split(":", 2)
+            if len(parts) < 3:
+                continue
+            path_str, line_str, text = parts[0], parts[1], parts[2]
+            try:
+                line_no = int(line_str)
+            except ValueError:
+                continue
+            match_path = (root / path_str).resolve() if not Path(path_str).is_absolute() else Path(path_str)
+            results.append({
+                "file": _relative_path(match_path, root),
+                "line": line_no,
+                "text": text[:200],
+            })
+            if len(results) >= max_results:
+                truncated = True
+                break
+    else:
+        flags = re.IGNORECASE if ignore_case else 0
+        regex = re.compile(pattern, flags=flags)
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if file_glob and not path.match(file_glob):
+                continue
+            try:
+                if path.stat().st_size > 1_000_000:
+                    continue
+            except OSError:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            for idx, line in enumerate(content.splitlines(), start=1):
+                if regex.search(line):
+                    results.append({
+                        "file": _relative_path(path, root),
+                        "line": idx,
+                        "text": line[:200],
+                    })
+                    if len(results) >= max_results:
+                        truncated = True
+                        break
+            if truncated:
+                break
+
+    payload = {
+        "pattern": pattern,
+        "root_path": str(root),
+        "file_glob": file_glob or None,
+        "results": results,
+        "truncated": truncated,
     }
     return json.dumps(payload)
 

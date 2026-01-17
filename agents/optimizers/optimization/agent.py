@@ -10,6 +10,7 @@ from langchain.agents.middleware.model_call_limit import ModelCallLimitMiddlewar
 from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent, NOTIFICATION
+from tools.analysis import search_codebase
 from tools.optimizer import (
     apply_snippet_patch_guarded,
     load_analysis_report,
@@ -59,13 +60,24 @@ Your job is to safely apply code improvements without breaking behavior.
 1) Call load_analysis_report(analysis_source) first.
 2) Extract suggested_focus_files and priorities from analysis.
 3) Only modify priorities with evidence_file + evidence_lines, or after confirming with read_code_snippet.
-4) Limit edits to files listed in suggested_focus_files.
+4) Limit edits to files listed in suggested_focus_files or evidence_file entries from priorities.
 5) For each change, use preview_snippet_patch_guarded first, then apply_snippet_patch_guarded.
+
+## Tool Usage Hints
+- Use search_codebase to locate existing helpers (executors, pools, tracing helpers) before introducing new ones.
+- Use read_code_snippet to capture full function context before editing.
 
 ## Safety Rules
 - Avoid API/schema changes, protocol changes.
 - If you cannot confirm a change from snippets, skip it and explain why.
 - If preview_snippet_patch fails (not found or not unique), skip the priority.
+
+## Relaxed Optimization Rules
+- You may introduce small local helpers (e.g., bounded concurrency helper) inside the same file when no
+  existing executor/pool is found and the change is clearly scoped.
+- You may replace unbounded std::async fan-out with a bounded helper if you preserve ordering and
+  error propagation (wait/get in the same sequence as before).
+- Do not add new third-party dependencies; keep changes minimal and document risks.
 
 ## Output Format (JSON only)
 - applied_changes: list of {file, summary, diff, applied}
@@ -81,6 +93,7 @@ Your job is to safely apply code improvements without breaking behavior.
         load_analysis_report,
         load_summary_text,
         read_code_snippet,
+        search_codebase,
         preview_snippet_patch_guarded,
         apply_snippet_patch_guarded,
     ]

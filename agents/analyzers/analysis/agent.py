@@ -15,6 +15,7 @@ from tools.analysis import (
     load_environment_summary,
     load_static_analysis,
     read_code_snippet,
+    search_codebase,
 )
 
 
@@ -92,6 +93,11 @@ class AnalyzerAgent(BaseAgent):
 Your task is to analyze a codebase using summary text and static analysis signals, then produce
 actionable optimization guidance for a downstream optimizer agent.
 
+Input is JSON with:
+- summary_source: path to summary text
+- static_source: path to static analysis JSON
+- root_path: repository root to use for snippet/search tools
+
 ## Analysis Approach
 1) Understand system context from the summaries (architecture, services, dependencies, infra).
 2) Review static signals (coverage, hotspots, client usage, dependencies, security).
@@ -102,7 +108,8 @@ actionable optimization guidance for a downstream optimizer agent.
 - Call build_analysis_bundle(summary_source, static_source, max_items=12) first.
 - Use bundle signals (hotspots, candidate files, coverage) to guide which code to inspect.
 - Prefer non-test paths; avoid prioritizing test-only hotspots unless no production paths exist.
-- When evidence is needed, use read_code_snippet with small, bounded windows.
+- Use search_codebase to locate concrete files/lines for high-impact patterns (e.g., async fan-out, redis usage, tracing).
+- When evidence is needed, use read_code_snippet with small, bounded windows (pass root_path).
 - Never read entire files.
 
 ## Decision Rules
@@ -110,6 +117,8 @@ actionable optimization guidance for a downstream optimizer agent.
 - Highlight chatty HTTP usage, repeated serialization, and excessive logging in hot paths.
 - If endpoints are not detected, do not infer endpoint behavior; note the gap.
 - If tools are missing or coverage is low, lower confidence explicitly.
+- If a priority involves concurrency, reuse an existing executor/pool if found; otherwise mark as needs_inspection.
+- Avoid proposing schema/key changes unless an existing migration or compatibility layer is evident.
 
 ## Output Constraints
 - suggested_focus_files[].file must be a concrete repo-relative file path (no descriptions, no globs, no directories).
@@ -136,13 +145,14 @@ Keys:
 
     return_state_field = "analysis_report"
     temperature = 0.7
-    max_iterations = 6
+    max_iterations = 20
 
     tools = [
         build_analysis_bundle,
         load_environment_summary,
         load_static_analysis,
         read_code_snippet,
+        search_codebase,
     ]
 
     def run(self, input_text: str) -> str:
