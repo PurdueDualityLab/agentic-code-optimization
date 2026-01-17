@@ -1,4 +1,4 @@
-"""LangGraph orchestrator for summary + static analysis + optimize + correctness."""
+"""LangGraph orchestrator for benchmark + summary + static + optimize + correctness + benchmark."""
 
 from __future__ import annotations
 
@@ -10,9 +10,12 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from agents.analyzers import AnalyzerAgent
+from agents.benchmarks import BenchmarkAgent
 from agents.checkers.code_correctness import CodeCorrectnessCheckAgent
 from agents.optimizers import OptimizerAgent
 from static_analisis_tools.runner import run_static_analysis
+from utils.benchmark import (compare_benchmark_metrics,
+                             render_benchmark_charts, write_benchmark_report)
 from workflows.summary_orchestrator import orchestrate_summarizers
 
 
@@ -21,6 +24,10 @@ class OptimizationCorrectnessState(TypedDict):
 
     code_path: str
     analysis_source: str
+    benchmark_cmd: str
+    benchmark_timeout: Optional[int]
+    benchmark_artifact_dir: str
+    benchmark_enabled: bool
     spec: str
     mode: str
     language: str
@@ -31,6 +38,31 @@ class OptimizationCorrectnessState(TypedDict):
     analysis_report: str
     optimization_report: str
     correctness_report: str
+    benchmark_before: dict
+    benchmark_after: dict
+    benchmark_report: str
+
+
+def benchmark_before_node(state: OptimizationCorrectnessState) -> dict[str, Any]:
+    """Run baseline benchmark before optimization."""
+    if not state.get("benchmark_enabled", True):
+        return {"benchmark_before": {"status": "skipped", "reason": "benchmark_disabled"}}
+
+    command = state.get("benchmark_cmd") or ""
+    if not command:
+        return {"benchmark_before": {"error": "missing_benchmark_cmd"}}
+
+    artifact_dir = Path(state.get("benchmark_artifact_dir") or "")
+    benchmark_dir = artifact_dir / "benchmark" if artifact_dir else Path.cwd() / "benchmark"
+    agent = BenchmarkAgent()
+    result = agent.run(
+        command=command,
+        output_dir=benchmark_dir,
+        label="before",
+        cwd=state.get("code_path"),
+        timeout=state.get("benchmark_timeout"),
+    )
+    return {"benchmark_before": result}
 
 
 def summary_node(state: OptimizationCorrectnessState) -> dict[str, Any]:
@@ -199,21 +231,79 @@ def correctness_node(state: OptimizationCorrectnessState) -> dict[str, Any]:
     return {"correctness_report": json.dumps(payload, indent=2)}
 
 
+def benchmark_after_node(state: OptimizationCorrectnessState) -> dict[str, Any]:
+    """Run benchmark after correctness check."""
+    if not state.get("benchmark_enabled", True):
+        return {"benchmark_after": {"status": "skipped", "reason": "benchmark_disabled"}}
+
+    command = state.get("benchmark_cmd") or ""
+    if not command:
+        return {"benchmark_after": {"error": "missing_benchmark_cmd"}}
+
+    artifact_dir = Path(state.get("benchmark_artifact_dir") or "")
+    benchmark_dir = artifact_dir / "benchmark" if artifact_dir else Path.cwd() / "benchmark"
+    agent = BenchmarkAgent()
+    result = agent.run(
+        command=command,
+        output_dir=benchmark_dir,
+        label="after",
+        cwd=state.get("code_path"),
+        timeout=state.get("benchmark_timeout"),
+    )
+    return {"benchmark_after": result}
+
+
+def benchmark_compare_node(state: OptimizationCorrectnessState) -> dict[str, Any]:
+    """Compare benchmark results and render charts."""
+    if not state.get("benchmark_enabled", True):
+        payload = {
+            "status": "skipped",
+            "reason": "benchmark_disabled",
+            "before": state.get("benchmark_before") or {},
+            "after": state.get("benchmark_after") or {},
+        }
+        return {"benchmark_report": json.dumps(payload, indent=2)}
+
+    before = state.get("benchmark_before") or {}
+    after = state.get("benchmark_after") or {}
+
+    comparison = compare_benchmark_metrics(before, after)
+    artifact_dir = Path(state.get("benchmark_artifact_dir") or "")
+    benchmark_dir = artifact_dir / "benchmark" if artifact_dir else Path.cwd() / "benchmark"
+    files = write_benchmark_report(benchmark_dir, before, after, comparison)
+    charts = render_benchmark_charts(benchmark_dir, comparison, before, after)
+
+    payload = {
+        "before": before,
+        "after": after,
+        "comparison": comparison,
+        "files": files,
+        "charts": charts,
+    }
+    return {"benchmark_report": json.dumps(payload, indent=2)}
+
+
 def build_optimization_correctness_workflow() -> StateGraph:
     """Build the optimization + correctness workflow."""
     workflow = StateGraph(OptimizationCorrectnessState)
+    workflow.add_node("benchmark_before", benchmark_before_node)
     workflow.add_node("summary", summary_node)
     workflow.add_node("static", static_node)
     workflow.add_node("analysis", analysis_node)
     workflow.add_node("optimize", optimize_node)
     workflow.add_node("correctness", correctness_node)
+    workflow.add_node("benchmark_after", benchmark_after_node)
+    workflow.add_node("benchmark_compare", benchmark_compare_node)
 
-    workflow.add_edge(START, "summary")
+    workflow.add_edge(START, "benchmark_before")
+    workflow.add_edge("benchmark_before", "summary")
     workflow.add_edge("summary", "static")
     workflow.add_edge("static", "analysis")
     workflow.add_edge("analysis", "optimize")
     workflow.add_edge("optimize", "correctness")
-    workflow.add_edge("correctness", END)
+    workflow.add_edge("correctness", "benchmark_after")
+    workflow.add_edge("benchmark_after", "benchmark_compare")
+    workflow.add_edge("benchmark_compare", END)
 
     return workflow.compile()
 
@@ -221,6 +311,10 @@ def build_optimization_correctness_workflow() -> StateGraph:
 def orchestrate_optimization_correctness(
     code_path: str,
     analysis_source: str = "",
+    benchmark_cmd: str = "",
+    benchmark_timeout: Optional[int] = None,
+    benchmark_artifact_dir: str = "",
+    benchmark_enabled: bool = True,
     spec: str = "",
     mode: str = "analyze_then_summarize",
     language: str = "C++",
@@ -232,6 +326,10 @@ def orchestrate_optimization_correctness(
     return workflow.invoke({
         "code_path": code_path,
         "analysis_source": analysis_source,
+        "benchmark_cmd": benchmark_cmd,
+        "benchmark_timeout": benchmark_timeout,
+        "benchmark_artifact_dir": benchmark_artifact_dir,
+        "benchmark_enabled": benchmark_enabled,
         "spec": spec,
         "mode": mode,
         "language": language,
@@ -242,6 +340,9 @@ def orchestrate_optimization_correctness(
         "analysis_report": "",
         "optimization_report": "",
         "correctness_report": "",
+        "benchmark_before": {},
+        "benchmark_after": {},
+        "benchmark_report": "",
     })
 
 

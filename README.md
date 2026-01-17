@@ -34,11 +34,21 @@ Three specialized agents run in parallel to analyze different aspects of code:
 ### Phase 4: Code Correctness Check
 - **Code Correctness Agent** - Verifies that applied changes preserve intended behavior
 
+### Phase 5: Benchmarking
+- **Benchmark Agent** - Runs baseline and post-optimization benchmarks and generates comparison charts
+
 ### Workflow Execution
 
 ```
 ┌─────────────────────────────────────────────┐
 │                 Input Code                  │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   BENCHMARK (Baseline)                      │
+├─────────────────────────────────────────────┤
+│  Benchmark Agent                            │
 └────────────┬────────────────────────────────┘
              │
              ▼
@@ -83,6 +93,14 @@ Three specialized agents run in parallel to analyze different aspects of code:
              │
              ▼
 ┌─────────────────────────────────────────────┐
+│   PHASE 5: BENCHMARK (Post) + COMPARISON    │
+├─────────────────────────────────────────────┤
+│  Benchmark Agent (before + after)           │
+│  Charts + Comparison Report                 │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
 │ Optimized Code + Reports + Artifacts        │
 └─────────────────────────────────────────────┘
 ```
@@ -94,6 +112,8 @@ agentic-code-optimization/
 ├── agents/                      # Agent framework
 │   ├── base.py                 # BaseAgent abstract class
 │   ├── __init__.py
+│   ├── benchmarks/            # Benchmark agents
+│   │   └── benchmark/          # Benchmark runner
 │   ├── checkers/               # Validation/checker agents
 │   │   └── code_correctness/   # Correctness check agent
 │   └── summarizers/            # Specialized summarizer agents
@@ -121,6 +141,7 @@ agentic-code-optimization/
 ├── utils/                       # Utilities (NEW)
 │   ├── metrics.py              # ExecutionMetrics, Trace, ObservabilityManager
 │   ├── runs.py                 # RunManager for artifact management
+│   ├── benchmark.py            # Benchmark parsing + comparison helpers
 │   └── __init__.py
 ├── evaluate.py                 # Main evaluation script
 ├── evaluate_code_correctles.py # Full workflow + correctness check
@@ -207,10 +228,15 @@ python evaluate.py /path/to/repo
 
 ### Complete Workflow Execution
 
-This runs: summary → static analysis → analysis → optimize → correctness.
+This runs: benchmark → summary → static analysis → analysis → optimize → correctness → benchmark comparison.
 
 ```bash
 venv/bin/python evaluate_code_correctles.py /path/to/repo
+```
+
+Required benchmark command (set once via `.env` or CLI):
+```
+BENCHMARK_CMD="docker run --rm ... wrk2 ..."
 ```
 
 **Python API:**
@@ -477,7 +503,14 @@ ProviderRegistry.register("custom", CustomProvider, CustomConfig)
 
 ```
 ┌─────────────────────────────────────────────┐
-│              Input Code                     │
+│                 Input Code                  │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   BENCHMARK (Baseline)                      │
+├─────────────────────────────────────────────┤
+│  Benchmark Agent                            │
 └────────────┬────────────────────────────────┘
              │
              ▼
@@ -497,7 +530,14 @@ ProviderRegistry.register("custom", CustomProvider, CustomConfig)
              │
              ▼
 ┌─────────────────────────────────────────────┐
-│   PHASE 2: OPTIMIZATION (Sequential)        │
+│   PHASE 2: STATIC ANALYSIS                  │
+├─────────────────────────────────────────────┤
+│  Static Analysis Tools                      │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 3: OPTIMIZATION (Sequential)        │
 ├─────────────────────────────────────────────┤
 │  Analyzer Agent                             │
 │    ↓                                        │
@@ -508,7 +548,21 @@ ProviderRegistry.register("custom", CustomProvider, CustomConfig)
              │
              ▼
 ┌─────────────────────────────────────────────┐
-│    Optimized Code + Report + Artifacts      │
+│   PHASE 4: CORRECTNESS CHECK                │
+├─────────────────────────────────────────────┤
+│  Code Correctness Agent                     │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   BENCHMARK (Post) + COMPARISON             │
+├─────────────────────────────────────────────┤
+│  Benchmark Agent + Charts                   │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│ Optimized Code + Reports + Artifacts        │
 └─────────────────────────────────────────────┘
 ```
 

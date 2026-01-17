@@ -86,8 +86,8 @@ Your job is to safely apply code improvements without breaking behavior.
 """
 
     return_state_field = "optimization_report"
-    temperature = 0.7
-    max_iterations = 20
+    temperature = 1
+    max_iterations = 25
 
     tools = [
         load_analysis_report,

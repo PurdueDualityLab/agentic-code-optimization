@@ -10,6 +10,7 @@ from pathlib import Path
 from beautilog import logger
 from dotenv import load_dotenv
 
+from config import ConfigParser, WorkflowConfig
 from utils import RunManager
 from workflows.optimization_correctness_orchestrator import (
     orchestrate_optimization_correctness,
@@ -18,6 +19,8 @@ from workflows.optimization_correctness_orchestrator import (
 load_dotenv()
 
 SPEC_ENV_VAR = "CODE_CORRECTNESS_SPEC"
+BENCHMARK_CMD_ENV_VAR = "BENCHMARK_CMD"
+BENCHMARK_TIMEOUT_ENV_VAR = "BENCHMARK_TIMEOUT"
 
 
 def _load_spec(spec: str, spec_file: str) -> str:
@@ -29,10 +32,41 @@ def _load_spec(spec: str, spec_file: str) -> str:
     return env_spec
 
 
+def _load_benchmark_cmd(cmd: str) -> str:
+    if cmd:
+        return cmd
+    return os.getenv(BENCHMARK_CMD_ENV_VAR, "")
+
+
+def _load_benchmark_timeout(value: str) -> int | None:
+    if value:
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    env_value = os.getenv(BENCHMARK_TIMEOUT_ENV_VAR, "")
+    if not env_value:
+        return None
+    try:
+        return int(env_value)
+    except ValueError:
+        return None
+
+
+def _load_benchmark_enabled() -> bool:
+    try:
+        return bool(ConfigParser.get(WorkflowConfig).enable_benchmark)
+    except Exception:
+        return True
+
+
 def evaluate_code_correctness_workflow(
     repo_path: str,
     spec: str,
     analysis_source: str,
+    benchmark_cmd: str,
+    benchmark_timeout: int | None,
+    benchmark_enabled: bool,
     mode: str,
     language: str,
     change_index: int | None,
@@ -45,15 +79,15 @@ def evaluate_code_correctness_workflow(
         sys.exit(1)
 
     run_manager = RunManager()
-    run_dir = run_manager.create_run_dir(repo_path, "OptimizationCorrectnessWorkflow")
+    run_dir = run_manager.create_run_dir(repo_path, "OptimizationBenchmarkCorrectnessWorkflow")
     print(f"\nRun directory created: {run_dir}")
 
     run_manager.save_config(Path.cwd() / "config.ini")
-    run_manager.save_input(repo_path, "OptimizationCorrectnessWorkflow")
+    run_manager.save_input(repo_path, "OptimizationBenchmarkCorrectnessWorkflow")
     logger.update_log_file_path(run_dir / "execution.log")
 
     print("=" * 80)
-    print("SUMMARY + STATIC ANALYSIS + ANALYSIS + OPTIMIZATION + CODE CORRECTNESS WORKFLOW EVALUATION")
+    print("BENCHMARK + SUMMARY + STATIC ANALYSIS + ANALYSIS + OPTIMIZATION + CODE CORRECTNESS + BENCHMARK")
     print("=" * 80)
     print()
 
@@ -62,8 +96,14 @@ def evaluate_code_correctness_workflow(
     print(f"  Path Exists: {repo_path_obj.exists()}")
     print(f"  Is Directory: {repo_path_obj.is_dir()}")
     print(f"  Analysis Source: {analysis_source or '(auto)'}")
+    print(f"  Benchmark Enabled: {benchmark_enabled}")
     print(f"  Run Directory: {run_dir}")
     print()
+
+    if benchmark_enabled and not benchmark_cmd:
+        print("ERROR: Missing benchmark command.")
+        print(f"Set {BENCHMARK_CMD_ENV_VAR} in .env or pass --benchmark-cmd.")
+        sys.exit(1)
 
     print("RUNNING WORKFLOW...")
     print("-" * 80)
@@ -74,6 +114,10 @@ def evaluate_code_correctness_workflow(
         result = orchestrate_optimization_correctness(
             code_path=str(repo_path_obj.absolute()),
             analysis_source=analysis_source,
+            benchmark_cmd=benchmark_cmd,
+            benchmark_timeout=benchmark_timeout,
+            benchmark_artifact_dir=str(run_dir),
+            benchmark_enabled=benchmark_enabled,
             spec=spec,
             mode=mode,
             language=language,
@@ -85,10 +129,13 @@ def evaluate_code_correctness_workflow(
 
         optimization_report = result.get("optimization_report", "")
         correctness_report = result.get("correctness_report", "")
+        benchmark_report = result.get("benchmark_report", "")
         print("\nOPTIMIZATION REPORT:")
         print(optimization_report[:2000] + "..." if len(optimization_report) > 2000 else optimization_report)
         print("\nCORRECTNESS REPORT:")
         print(correctness_report[:2000] + "..." if len(correctness_report) > 2000 else correctness_report)
+        print("\nBENCHMARK REPORT:")
+        print(benchmark_report[:2000] + "..." if len(benchmark_report) > 2000 else benchmark_report)
 
     except Exception as exc:
         logger.error(f"Workflow execution failed: {str(exc)}", exc_info=True)
@@ -103,6 +150,7 @@ def evaluate_code_correctness_workflow(
     combined = {
         "optimization_report": optimization_report,
         "correctness_report": correctness_report,
+        "benchmark_report": benchmark_report,
     }
 
     output_text = json.dumps(combined, indent=2)
@@ -111,7 +159,7 @@ def evaluate_code_correctness_workflow(
     response_json.write_text(output_text, encoding="utf-8")
 
     metrics = {
-        "workflow": "OptimizationCorrectnessWorkflow",
+        "workflow": "OptimizationBenchmarkCorrectnessWorkflow",
         "execution_time_seconds": round(execution_time, 2),
         "result_length": len(output_text),
     }
@@ -125,7 +173,7 @@ def evaluate_code_correctness_workflow(
     print("=" * 80)
     print("EVALUATION COMPLETE")
     print("=" * 80)
-    logger.info("Optimization correctness workflow evaluation completed successfully")
+    logger.info("Optimization benchmark correctness workflow evaluation completed successfully")
 
 
 def main() -> None:
@@ -139,6 +187,8 @@ def main() -> None:
         help="Path to repository",
     )
     parser.add_argument("--analysis-source", default="", help="Path to analysis JSON")
+    parser.add_argument("--benchmark-cmd", default="", help="Benchmark command to run")
+    parser.add_argument("--benchmark-timeout", default="", help="Benchmark timeout in seconds")
     parser.add_argument("--spec", default="", help="Problem statement spec (optional)")
     parser.add_argument("--spec-file", default="", help="Path to problem statement text (optional)")
     parser.add_argument(
@@ -162,10 +212,16 @@ def main() -> None:
     args = parser.parse_args()
 
     spec = _load_spec(args.spec, args.spec_file)
+    benchmark_cmd = _load_benchmark_cmd(args.benchmark_cmd)
+    benchmark_timeout = _load_benchmark_timeout(args.benchmark_timeout)
+    benchmark_enabled = _load_benchmark_enabled()
     evaluate_code_correctness_workflow(
         repo_path=args.repo_path,
         spec=spec,
         analysis_source=args.analysis_source,
+        benchmark_cmd=benchmark_cmd,
+        benchmark_timeout=benchmark_timeout,
+        benchmark_enabled=benchmark_enabled,
         mode=args.mode,
         language=args.language,
         change_index=args.change_index,

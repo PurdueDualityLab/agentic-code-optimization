@@ -8,8 +8,7 @@ from typing import Any, Literal, TypedDict
 from langchain.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from config import AgentConfig, ConfigParser
-from providers import LLM, ProviderRegistry
+from agents.base import BaseAgent
 
 
 PROMPT_TABLE18_ANALYSIS = """You will be provided with a problem statement and a code snippet that supposedly addresses the
@@ -69,15 +68,14 @@ class CodeCorrectnessState(TypedDict):
     error: str
 
 
-class CodeCorrectnessCheckAgent:
+class CodeCorrectnessCheckAgent(BaseAgent):
     """LangGraph agent that evaluates code correctness using fixed prompts."""
 
-    name = "code_correctness_check"
-
-    def __init__(self, provider_name: str | None = None) -> None:
-        config = ConfigParser.get(AgentConfig)
-        self.provider_name = provider_name or config.default_provider
-        self.llm = ProviderRegistry.get(self.provider_name, LLM)
+    prompt = "Code correctness check agent."
+    tools: list[Any] = []
+    return_state_field = "correctness_report"
+    temperature = 1
+    max_iterations = 25
 
     def run(self, input_payload: str | dict[str, Any]) -> str:
         """Run the correctness check workflow with wrapper-level JSON input."""

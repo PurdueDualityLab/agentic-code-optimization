@@ -144,8 +144,8 @@ Keys:
 """
 
     return_state_field = "analysis_report"
-    temperature = 0.7
-    max_iterations = 20
+    temperature = 1
+    max_iterations = 25
 
     tools = [
         build_analysis_bundle,
