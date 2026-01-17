@@ -7,6 +7,7 @@ Usage:
     python evaluate.py <repo_path>              # Run on specific repository
 """
 
+import asyncio
 import logging
 import sys
 import time
@@ -21,7 +22,7 @@ from utils import RunManager
 load_dotenv()
 
 
-def evaluate_environment_summarizer(repo_path: str) -> None:
+async def evaluate_environment_summarizer(repo_path: str) -> None:
     """Evaluate EnvironmentSummarizer on a given repository.
 
     Args:
@@ -76,7 +77,7 @@ def evaluate_environment_summarizer(repo_path: str) -> None:
     try:
         logger.info(f"Starting agent execution for repository: {repo_path_obj.absolute()}")
         start_time = time.time()
-        result = agent.run(str(repo_path_obj.absolute()))
+        result = await agent.run(str(repo_path_obj.absolute()))
         execution_time = time.time() - start_time
         logger.info(f"Agent execution completed successfully, result length: {len(result) if result else 0}")
         print(result)
@@ -144,7 +145,7 @@ def main() -> None:
         # Use current project directory as default
         repo_path = str(Path(__file__).parent.absolute())
 
-    evaluate_environment_summarizer(repo_path)
+    asyncio.run(evaluate_environment_summarizer(repo_path))
 
 
 if __name__ == "__main__":

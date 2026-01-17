@@ -14,20 +14,15 @@ This agent analyzes code to understand:
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.behavior import (
-    analyze_code_complexity,
-    analyze_code_structure,
-    analyze_data_dependencies,
-    analyze_error_handling_strategy,
-    analyze_function_interactions,
-    analyze_functions,
-    detect_performance_bottlenecks,
-    extract_code_documentation,
-    identify_code_patterns,
-)
+from tools.behavior import (analyze_code_complexity, analyze_code_structure,
+                            analyze_data_dependencies,
+                            analyze_error_handling_strategy,
+                            analyze_function_interactions, analyze_functions,
+                            detect_performance_bottlenecks,
+                            extract_code_documentation, identify_code_patterns)
 
 
-class BehaviorSummarizer(BaseAgent):
+class BehaviorSummarizerAgent(BaseAgent):
     """Agent for analyzing code behavior and execution patterns.
 
     This agent systematically analyzes code to provide comprehensive understanding of:

@@ -18,7 +18,7 @@ from tools.component import (analyze_classes, analyze_component_boundaries,
                              analyze_service_architecture)
 
 
-class ComponentSummarizer(BaseAgent):
+class ComponentSummarizerAgent(BaseAgent):
    """Agent for analyzing code structure and component organization.
 
    This agent systematically analyzes code to provide comprehensive understanding of:

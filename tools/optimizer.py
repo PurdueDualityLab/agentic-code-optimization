@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import difflib
 import json
 from pathlib import Path
@@ -103,7 +104,7 @@ def _allowed_files_from_analysis(analysis: Dict[str, Any], root_path: str) -> Li
 
 
 @tool
-def load_analysis_report(analysis_source: str) -> str:
+async def load_analysis_report(analysis_source: str) -> str:
     """Load analysis JSON from a path or raw JSON string."""
     try:
         data = _read_json(analysis_source)
@@ -113,7 +114,7 @@ def load_analysis_report(analysis_source: str) -> str:
 
 
 @tool
-def load_summary_text(summary_source: str) -> str:
+async def load_summary_text(summary_source: str) -> str:
     """Load summary text from a path or raw text."""
     return _read_text(summary_source)
 
@@ -165,7 +166,7 @@ def _preview_snippet_patch_impl(
 
 
 @tool
-def preview_snippet_patch(
+async def preview_snippet_patch(
     file_path: str,
     old_snippet: str,
     new_snippet: str,
@@ -232,7 +233,7 @@ def _apply_snippet_patch_impl(
 
 
 @tool
-def apply_snippet_patch(
+async def apply_snippet_patch(
     file_path: str,
     old_snippet: str,
     new_snippet: str,
@@ -250,7 +251,7 @@ def apply_snippet_patch(
 
 
 @tool
-def preview_snippet_patch_guarded(
+async def preview_snippet_patch_guarded(
     file_path: str,
     old_snippet: str,
     new_snippet: str,
@@ -272,7 +273,7 @@ def preview_snippet_patch_guarded(
 
 
 @tool
-def apply_snippet_patch_guarded(
+async def apply_snippet_patch_guarded(
     file_path: str,
     old_snippet: str,
     new_snippet: str,

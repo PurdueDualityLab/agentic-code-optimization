@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import shutil
@@ -11,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
 
-from static_analisis_tools.runner import run_static_analysis
+from static_analisis_tools.runner import runner_static_analysis
 
 MAX_SNIPPET_LINES = 400
 MAX_SNIPPET_CHARS = 8000
@@ -132,20 +133,20 @@ def _candidate_files(
 
 
 @tool
-def load_environment_summary(summary_source: str) -> str:
+async def load_environment_summary(summary_source: str) -> str:
     """Load environment/component/behavior summary text from path or raw text."""
     return _read_text(summary_source)
 
 
 @tool
-def load_static_analysis(static_source: str) -> str:
+async def load_static_analysis(static_source: str) -> str:
     """Load static analysis JSON from path or raw JSON string."""
     data = _read_json(static_source)
     return json.dumps(data)
 
 
 @tool
-def read_code_snippet(
+async def read_code_snippet(
     file_path: str,
     root_path: str = "",
     start_line: int = 1,
@@ -196,7 +197,7 @@ def read_code_snippet(
 
 
 @tool
-def search_codebase(
+async def search_codebase(
     pattern: str,
     root_path: str = "",
     file_glob: str = "",
@@ -227,20 +228,22 @@ def search_codebase(
         cmd.append(pattern)
         cmd.append(str(root))
         try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(root),
-                timeout=30,
             )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except asyncio.TimeoutError:
+            return json.dumps({"error": "rg_timeout"})
         except Exception as exc:
             return json.dumps({"error": "rg_failed", "detail": str(exc)})
 
         if proc.returncode not in (0, 1):
-            return json.dumps({"error": "rg_failed", "detail": proc.stderr.strip()})
+            return json.dumps({"error": "rg_failed", "detail": stderr.decode().strip()})
 
-        for line in proc.stdout.splitlines():
+        for line in stdout.decode().splitlines():
             parts = line.split(":", 2)
             if len(parts) < 3:
                 continue
@@ -303,7 +306,7 @@ def search_codebase(
 
 
 @tool
-def build_analysis_bundle(
+async def build_analysis_bundle(
     summary_source: str,
     static_source: str,
     max_items: int = 12,
@@ -479,3 +482,10 @@ def build_analysis_bundle(
         bundle["summary_excerpt"] = summary_text[:max_excerpt_chars]
 
     return json.dumps(bundle, indent=2)
+
+
+@tool
+async def run_static_analysis(root_path: str, max_items: int = 200) -> str:
+    """Run static analysis tools on a codebase and return signals."""
+    result = runner_static_analysis(root_path, max_items=max_items)
+    return json.dumps(result, indent=2)

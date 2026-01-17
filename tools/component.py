@@ -10,6 +10,8 @@ These tools provide specialized analysis of code components:
 
 from __future__ import annotations
 
+import asyncio
+
 import ast
 import re
 from pathlib import Path

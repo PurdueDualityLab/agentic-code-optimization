@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from typing import List
 
-from langchain.agents import create_agent
-from langchain.agents.middleware.model_call_limit import ModelCallLimitMiddleware
 from pydantic import BaseModel, Field
 
-from agents.base import BaseAgent, NOTIFICATION
+from agents.base import BaseAgent
 from tools.analysis import search_codebase
-from tools.optimizer import (
-    apply_snippet_patch_guarded,
-    load_analysis_report,
-    load_summary_text,
-    preview_snippet_patch_guarded,
-    read_code_snippet,
-)
+from tools.optimizer import (apply_snippet_patch_guarded, load_analysis_report,
+                             load_summary_text, preview_snippet_patch_guarded,
+                             read_code_snippet)
 
 
 class AppliedChange(BaseModel):
@@ -84,10 +77,9 @@ Your job is to safely apply code improvements without breaking behavior.
 - skipped_priorities: list of {title, reason}
 - risks: list of short risks introduced or remaining
 """
-
+    structured_output_type = OptimizationReport
     return_state_field = "optimization_report"
-    temperature = 0.7
-    max_iterations = 20
+    max_iterations = 10
 
     tools = [
         load_analysis_report,
@@ -97,44 +89,3 @@ Your job is to safely apply code improvements without breaking behavior.
         preview_snippet_patch_guarded,
         apply_snippet_patch_guarded,
     ]
-
-    def run(self, input_text: str) -> str:
-        """Execute the optimizer using structured output."""
-        self.logger.info("Starting agent execution (structured output)")
-        self.logger.info(f"Input length: {len(input_text)} characters")
-        self.logger.info(f"Available tools: {list(self.tools_by_name.keys())}")
-        self.logger.log(NOTIFICATION, f"Input text: {input_text[:200]}...")
-
-        middleware = [ModelCallLimitMiddleware(run_limit=self.max_iterations)]
-        agent_graph = create_agent(
-            model=self.llm,
-            tools=self.tools,
-            system_prompt=self.prompt,
-            response_format=OptimizationReport,
-            middleware=middleware,
-            name=self.name,
-        )
-
-        result = agent_graph.invoke(
-            {
-                "messages": [{"role": "user", "content": input_text}],
-            }
-        )
-
-        self.messages = result.get("messages", [])
-        structured = result.get("structured_response")
-        if isinstance(structured, BaseModel):
-            payload = structured.model_dump()
-        else:
-            payload = structured
-
-        if payload is None:
-            last_message = self.messages[-1] if self.messages else None
-            payload = {
-                "raw_response": (
-                    getattr(last_message, "content", "") if last_message else ""
-                )
-            }
-
-        self.final_result = json.dumps(payload, indent=2)
-        return self.final_result

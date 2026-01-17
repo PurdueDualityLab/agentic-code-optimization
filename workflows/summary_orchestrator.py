@@ -5,8 +5,8 @@ from typing import Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from agents.summarizers import (BehaviorSummarizer, ComponentSummarizer,
-                                EnvironmentSummarizer)
+from agents import (BehaviorSummarizerAgent, ComponentSummarizerAgent,
+                    EnvironmentSummarizerAgent)
 
 
 class SummaryState(TypedDict):
@@ -19,24 +19,24 @@ class SummaryState(TypedDict):
     skip_environment: bool
 
 
-def environment_node(state: SummaryState) -> dict:
+async def environment_node(state: SummaryState) -> dict:
     """Run environment summarizer."""
-    agent = EnvironmentSummarizer()
-    result = agent.run(state["code_path"])
+    agent = EnvironmentSummarizerAgent()
+    result = await agent.run(state["code_path"])
     return {"environment_summary": result}
 
 
-def component_node(state: SummaryState) -> dict:
+async def component_node(state: SummaryState) -> dict:
     """Run component summarizer."""
-    agent = ComponentSummarizer()
-    result = agent.run(state["code_path"])
+    agent = ComponentSummarizerAgent()
+    result = await agent.run(state["code_path"])
     return {"component_summary": result}
 
 
-def behavior_node(state: SummaryState) -> dict:
+async def behavior_node(state: SummaryState) -> dict:
     """Run behavior summarizer."""
-    agent = BehaviorSummarizer()
-    result = agent.run(state["code_path"])
+    agent = BehaviorSummarizerAgent()
+    result = await agent.run(state["code_path"])
     return {"behavior_summary": result}
 
 
@@ -72,7 +72,7 @@ def build_summarization_workflow() -> StateGraph:
     return workflow.compile()
 
 
-def orchestrate_summarizers(code_path: str) -> dict:
+async def orchestrate_summarizers(code_path: str) -> dict:
     """Run code summarization workflow.
 
     Args:
@@ -82,7 +82,7 @@ def orchestrate_summarizers(code_path: str) -> dict:
         Final workflow state with all summaries
     """
     workflow = build_summarization_workflow()
-    result = workflow.invoke(
+    result = await workflow.ainvoke(
         {
             "code_path": code_path,
             "environment_summary": "",

@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import List, Optional
 
-from langchain.agents import create_agent
-from langchain.agents.middleware.model_call_limit import \
-    ModelCallLimitMiddleware
 from pydantic import BaseModel, Field
 
-from agents.base import NOTIFICATION, BaseAgent
+from agents.base import BaseAgent
 from tools.analysis import (build_analysis_bundle, load_environment_summary,
                             read_code_snippet, run_static_analysis,
                             search_codebase)
@@ -141,9 +137,10 @@ Keys:
 - optimizer_constraints: list of guardrails for the optimizer agent
 """
 
+    structured_output_type = AnalysisReport
     return_state_field = "analysis_report"
     temperature = 0.7
-    max_iterations = 20
+    max_iterations = 10
 
     tools = [
         build_analysis_bundle,
@@ -152,139 +149,3 @@ Keys:
         read_code_snippet,
         search_codebase,
     ]
-
-    def run(self, input_text: str) -> str:
-        """Execute the analyzer using structured output."""
-        self.logger.info("Starting agent execution (structured output)")
-        self.logger.info(f"Input length: {len(input_text)} characters")
-        self.logger.info(f"Available tools: {list(self.tools_by_name.keys())}")
-        self.logger.log(NOTIFICATION, f"Input text: {input_text[:200]}...")
-
-        middleware = [ModelCallLimitMiddleware(run_limit=self.max_iterations)]
-        agent_graph = create_agent(
-            model=self.llm,
-            tools=self.tools,
-            system_prompt=self.prompt,
-            response_format=AnalysisReport,
-            middleware=middleware,
-            name=self.name,
-        )
-
-        result = agent_graph.invoke(
-            {
-                "messages": [{"role": "user", "content": input_text}],
-            }
-        )
-
-        self.messages = result.get("messages", [])
-        structured = result.get("structured_response")
-        if isinstance(structured, BaseModel):
-            payload = structured.model_dump()
-        else:
-            payload = structured
-
-        if payload is None:
-            last_message = self.messages[-1] if self.messages else None
-            payload = {
-                "raw_response": (
-                    getattr(last_message, "content", "") if last_message else ""
-                )
-            }
-
-        required_constraints = [
-            "Only modify priorities that include evidence_file and evidence_lines, or after confirming with read_code_snippet.",
-            "Limit edits to files listed in suggested_focus_files.",
-            "If a priority lacks concrete evidence, treat it as needs_inspection until confirmed.",
-        ]
-        if isinstance(payload, dict):
-            priorities = payload.get("priorities")
-            next_steps = payload.get("next_steps")
-            missing_titles: List[str] = []
-            if isinstance(priorities, list):
-                kept = []
-                for item in priorities:
-                    if not isinstance(item, dict):
-                        continue
-                    evidence_file = item.get("evidence_file")
-                    evidence_lines = item.get("evidence_lines")
-                    if not evidence_file or not evidence_lines:
-                        item["needs_inspection"] = True
-                        title = str(item.get("title") or "").strip()
-                        if title:
-                            missing_titles.append(title)
-                        continue
-                    item["needs_inspection"] = False
-                    kept.append(item)
-                payload["priorities"] = kept
-
-            if missing_titles:
-                note = "needs_inspection: confirm before optimization — " + "; ".join(
-                    missing_titles
-                )
-                if not isinstance(next_steps, list):
-                    next_steps = []
-                if note not in next_steps:
-                    if len(next_steps) >= 7:
-                        next_steps[-1] = note
-                    else:
-                        next_steps.append(note)
-                payload["next_steps"] = next_steps
-
-            existing_constraints = payload.get("optimizer_constraints") or []
-            if isinstance(existing_constraints, list):
-
-                def _constraint_category(text: str) -> str:
-                    lowered = text.lower()
-                    if (
-                        "evidence_file" in lowered
-                        or "evidence lines" in lowered
-                        or "read_code_snippet" in lowered
-                    ):
-                        return "evidence_required"
-                    if (
-                        "suggested_focus_files" in lowered
-                        or "limit edits to files" in lowered
-                    ):
-                        return "focus_files"
-                    if "needs_inspection" in lowered:
-                        return "needs_inspection"
-                    if "public api" in lowered or "service contract" in lowered:
-                        return "api_contracts"
-                    if "security" in lowered or "auth" in lowered:
-                        return "security_sensitive"
-                    return f"other:{lowered}"
-
-                required_by_category = {
-                    "evidence_required": required_constraints[0],
-                    "focus_files": required_constraints[1],
-                    "needs_inspection": required_constraints[2],
-                }
-
-                kept = []
-                seen_categories = set()
-                for item in existing_constraints:
-                    text = str(item).strip()
-                    if not text:
-                        continue
-                    category = _constraint_category(text)
-                    if category in required_by_category:
-                        continue
-                    if category in seen_categories:
-                        continue
-                    seen_categories.add(category)
-                    kept.append(text)
-
-                combined = kept + list(required_by_category.values())
-                deduped = []
-                seen_text = set()
-                for item in combined:
-                    key = str(item).strip().lower()
-                    if key in seen_text:
-                        continue
-                    seen_text.add(key)
-                    deduped.append(item)
-
-                payload["optimizer_constraints"] = deduped
-
-        self.final_result = json.dumps(payload, indent=2)
-        return self.final_result

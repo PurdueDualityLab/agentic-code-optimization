@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def list_repo_config_files(repo_path: str) -> str:
+async def list_repo_config_files(repo_path: str) -> str:
     """List all configuration files found in repository root."""
     config_patterns = {
         "build_system": ["Makefile", "CMakeLists.txt", "build.sh", "setup.py", "setup.cfg", "Rakefile", "Gemfile"],

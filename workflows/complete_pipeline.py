@@ -16,41 +16,107 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Any, Callable, Literal, Optional, Type, TypedDict
 
 from beautilog import logger
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.analyzers.analysis.agent import AnalyzerAgent
-from agents.checkers.code_correctness.agent import CodeCorrectnessCheckAgent
-from agents.optimizers.optimization.agent import OptimizerAgent
-from workflows.summary_orchestrator import orchestrate_summarizers
+from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
+                    OptimizerAgent, orchestrate_code_correctness)
+
+from .summary_orchestrator import orchestrate_summarizers
 
 # Maximum iterations for the optimization loop
 MAX_ITERATIONS = 5
 
 
-class PipelineState(TypedDict):
-    """State for complete optimization pipeline.
+class PipelinePhase:
+    """Defines a phase in the optimization pipeline."""
 
-    Tracks data flow across all pipeline phases with iterative refinement:
-    - Phase 1: Summarization (environment, component, behavior)
-    - Phase 2: Analysis (structured optimization guidance)
-    - Phase 3: Optimization (applied changes and risks)
-    - Phase 4: Correctness Check (validate applied changes)
-    - Loop: Conditional node decides whether to iterate or exit
+    def __init__(
+        self,
+        name: str,
+        node_fn: Callable[[Any], dict],
+        agent_class: Optional[Type] = None,
+        return_fields: Optional[list[str]] = None,
+        return_class: Optional[Type] = None,
+    ):
+        """Initialize a pipeline phase.
+
+        Args:
+            name: Phase name (e.g., "analysis")
+            node_fn: Node function to execute
+            agent_class: Optional agent class (used to extract return_state_field)
+            return_fields: Optional list of state fields this phase returns
+            return_class: Optional Pydantic model class for structured return type
+        """
+        self.name = name
+        self.node_fn = node_fn
+        self.agent_class = agent_class
+        self.return_fields = return_fields or []
+        self.return_class = return_class
+
+        # Extract return fields from agent if provided
+        if agent_class:
+            try:
+                agent_instance = agent_class()
+                if hasattr(agent_instance, "return_state_field"):
+                    self.return_fields.append(agent_instance.return_state_field)
+            except Exception:
+                pass  # Agent may require specific init args
+
+
+def build_pipeline_state(phases: list[PipelinePhase]) -> Type[TypedDict]:
+    """Dynamically build PipelineState TypedDict from pipeline phases.
+
+    Args:
+        phases: List of pipeline phases
+
+    Returns:
+        A TypedDict class with state fields from all phases
     """
+    state_fields: dict[str, Type] = {
+        "code_path": str,
+        "iteration_count": int,
+    }
 
-    code_path: str
-    summary_text: str
-    analysis_report: str
-    optimization_report: str
-    correctness_report: str
-    iteration_count: int
+    # Add state fields from each phase's return fields
+    for phase in phases:
+        for field in phase.return_fields:
+            state_fields[field] = str  # All agent outputs stored as JSON strings
+
+    return TypedDict("PipelineState", state_fields)
 
 
-def summary_node(state: PipelineState) -> dict:
+# Define pipeline phases in execution order
+_PIPELINE_PHASES = [
+    PipelinePhase("summarization", None, return_fields=["summary_text"]),
+    PipelinePhase(
+        "analysis",
+        None,
+        agent_class=AnalyzerAgent,
+        return_class=AnalysisReport,
+    ),
+    PipelinePhase(
+        "optimization",
+        None,
+        agent_class=OptimizerAgent,
+        return_class=OptimizationReport,
+    ),
+    PipelinePhase(
+        "correctness_check",
+        None,
+        return_fields=["analysis_result", "correctness_verdict"],
+        return_class=tuple,  # Composite: (AnalysisResult, CorrectnessVerdict)
+    ),
+]
+
+# Dynamically build PipelineState from phase definitions
+PipelineState = build_pipeline_state(_PIPELINE_PHASES)
+
+
+async def summary_node(state: PipelineState) -> dict:
     """PHASE 1: Run summarization workflow and combine summaries.
 
     Executes the summarization orchestrator in parallel and combines
@@ -65,7 +131,7 @@ def summary_node(state: PipelineState) -> dict:
     """
     iteration = state.get("iteration_count", 0) + 1
     logger.info(f"PHASE 1: Running summarization orchestrator (iteration {iteration}/{MAX_ITERATIONS})")
-    summaries = orchestrate_summarizers(state["code_path"])
+    summaries = await orchestrate_summarizers(state["code_path"])
 
     summary_text = (
         "ENVIRONMENT SUMMARY:\n"
@@ -80,7 +146,7 @@ def summary_node(state: PipelineState) -> dict:
     return {"summary_text": summary_text, "iteration_count": iteration}
 
 
-def analyze_node(state: PipelineState) -> dict:
+async def analyze_node(state: PipelineState) -> dict:
     """PHASE 2: Run AnalyzerAgent on combined summary.
 
     Creates temporary files containing the combined summary text, then invokes
@@ -117,13 +183,13 @@ def analyze_node(state: PipelineState) -> dict:
             "root_path": state["code_path"],
         }
 
-        result = agent.run(json.dumps(payload))
+        result = await agent.run(json.dumps(payload))
         logger.info("PHASE 2: Analysis complete")
 
     return {"analysis_report": result}
 
 
-def optimize_node(state: PipelineState) -> dict:
+async def optimize_node(state: PipelineState) -> dict:
     """PHASE 3: Run OptimizerAgent to apply safe code improvements.
 
     Creates temporary files containing the analysis report and combined
@@ -165,33 +231,26 @@ def optimize_node(state: PipelineState) -> dict:
             "root_path": state["code_path"],
         }
 
-        result = agent.run(json.dumps(payload))
+        result = await agent.run(json.dumps(payload))
         logger.info("PHASE 3: Optimization complete")
 
     return {"optimization_report": result}
 
 
-def correctness_check_node(state: PipelineState) -> dict:
-    """PHASE 4: Run CodeCorrectnessCheckAgent to validate applied changes.
+async def correctness_check_node(state: PipelineState) -> dict:
+    """PHASE 4: Run code correctness workflow.
 
-    Invokes the code correctness check agent to evaluate the correctness and
-    quality of the code changes applied by the optimizer. This validates that
-    the optimization did not introduce bugs or break functionality.
-
-    The CodeCorrectnessCheckAgent:
-    - Analyzes code changes for correctness against the problem context
-    - Identifies any inconsistencies or logic errors
-    - Provides a severity assessment of any issues found
-    - Guides whether further optimization iterations are needed
+    Orchestrates a two-phase correctness check:
+    - Phase 4a: Detailed analysis of applied code changes
+    - Phase 4b: Produces Yes/No correctness verdict
 
     Args:
-        state: Pipeline state containing optimization_report and code_path
+        state: Pipeline state containing optimization_report
 
     Returns:
-        Dictionary with correctness_report (JSON string)
+        Dictionary with analysis_result and correctness_verdict
     """
-    logger.info("PHASE 4: Running CodeCorrectnessCheckAgent")
-    agent = CodeCorrectnessCheckAgent()
+    logger.info("PHASE 4: Running code correctness workflow")
 
     # Parse the optimization report to extract applied changes
     try:
@@ -200,7 +259,7 @@ def correctness_check_node(state: PipelineState) -> dict:
     except (json.JSONDecodeError, TypeError):
         applied_changes = []
 
-    # Format changes for correctness check
+    # Format changes for analysis
     changes_summary = "\n".join(
         [
             f"File: {change.get('file', 'Unknown')}\n"
@@ -210,25 +269,27 @@ def correctness_check_node(state: PipelineState) -> dict:
         ]
     )
 
-    # Create payload for correctness check agent
-    payload = {
-        "mode": "analyze_then_summarize",
-        "language": "python",
-        "problem_statement": (
+    code_snippet = (
+        f"Applied optimizations from repository {state['code_path']}:\n\n"
+        f"{changes_summary}"
+    )
+
+    # Run the code correctness workflow
+    correctness_state = await orchestrate_code_correctness(
+        language="python",
+        problem_statement=(
             "Verify that the following code optimizations maintain correctness "
             "and do not introduce bugs or break existing functionality."
         ),
-        "code_snippet": (
-            f"Applied optimizations from repository {state['code_path']}:\n\n"
-            f"{changes_summary}"
-        ),
-        "strict_output_only": True,
+        code_snippet=code_snippet,
+    )
+
+    logger.info("PHASE 4: Code correctness workflow complete")
+
+    return {
+        "analysis_result": correctness_state.get("analysis_result", ""),
+        "correctness_verdict": correctness_state.get("correctness_verdict", ""),
     }
-
-    result = agent.run(payload)
-    logger.info("PHASE 4: Correctness check complete")
-
-    return {"correctness_report": result}
 
 
 def should_continue_loop(state: PipelineState) -> Literal["summarization", str]:
@@ -257,15 +318,21 @@ def should_continue_loop(state: PipelineState) -> Literal["summarization", str]:
 def build_complete_pipeline() -> CompiledStateGraph:
     """Build the complete four-phase optimization pipeline with iteration loop.
 
-    Constructs a LangGraph StateGraph that orchestrates:
+    Constructs a LangGraph StateGraph from phase definitions that orchestrates:
     1. Summarization (parallel environment, component, behavior summaries)
     2. Analysis (structured guidance based on summaries with static signals)
     3. Optimization (apply safe code improvements)
-    4. Correctness Check (validate applied changes for correctness)
+    4. Correctness Check (orchestrates pain analysis and structured verdict)
     5. Loop decision (conditionally loop back to summarization or end)
 
     The workflow follows a sequential DAG with conditional loop:
     START → summarization → analysis → optimization → correctness_check → (loop decision) → {summarization | END}
+
+    State fields are dynamically generated from phase definitions:
+    - summarization → summary_text
+    - analysis → analysis_report
+    - optimization → optimization_report
+    - correctness_check → pain_analysis_result, correctness_verdict
 
     Returns:
         Compiled LangGraph StateGraph ready for invocation
@@ -273,66 +340,107 @@ def build_complete_pipeline() -> CompiledStateGraph:
     logger.info("Building complete optimization pipeline")
     workflow = StateGraph(PipelineState)
 
-    # Add nodes for each phase
-    workflow.add_node("summarization", summary_node)
-    workflow.add_node("analysis", analyze_node)
-    workflow.add_node("optimization", optimize_node)
-    workflow.add_node("correctness_check", correctness_check_node)
+    # Map phase names to node functions
+    node_functions = {
+        "summarization": summary_node,
+        "analysis": analyze_node,
+        "optimization": optimize_node,
+        "correctness_check": correctness_check_node,
+    }
 
-    # Define sequential edges with conditional loop
-    workflow.add_edge(START, "summarization")
-    workflow.add_edge("summarization", "analysis")
-    workflow.add_edge("analysis", "optimization")
-    workflow.add_edge("optimization", "correctness_check")
+    # Add nodes from phase definitions
+    for phase in _PIPELINE_PHASES:
+        node_fn = node_functions.get(phase.name)
+        if node_fn:
+            workflow.add_node(phase.name, node_fn)
+            logger.debug(f"Added node: {phase.name} → {phase.return_fields}")
+
+    # Build sequential edges from phase order
+    workflow.add_edge(START, _PIPELINE_PHASES[0].name)
+    for i in range(len(_PIPELINE_PHASES) - 1):
+        current_phase = _PIPELINE_PHASES[i]
+        next_phase = _PIPELINE_PHASES[i + 1]
+        workflow.add_edge(current_phase.name, next_phase.name)
+        logger.debug(f"Added edge: {current_phase.name} → {next_phase.name}")
+
+    # Add conditional loop from last phase back to first phase
+    last_phase = _PIPELINE_PHASES[-1]
+    first_phase = _PIPELINE_PHASES[0]
     workflow.add_conditional_edges(
-        "correctness_check",
+        last_phase.name,
         should_continue_loop,
         {
-            "summarization": "summarization",
+            first_phase.name: first_phase.name,
             END: END,
         },
+    )
+    logger.debug(
+        f"Added conditional edge: {last_phase.name} → ({first_phase.name} | END)"
     )
 
     logger.info("Pipeline graph compiled")
     return workflow.compile()
 
 
-def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
+def _build_initial_state(code_path: str) -> dict[str, Any]:
+    """Build initial state with all dynamic fields initialized.
+
+    Args:
+        code_path: Path to the repository to optimize
+
+    Returns:
+        Dictionary with all state fields initialized to empty strings/zeros
+    """
+    initial_state = {
+        "code_path": code_path,
+        "iteration_count": 0,
+    }
+
+    # Initialize all return fields from phases with empty strings
+    for phase in _PIPELINE_PHASES:
+        for field in phase.return_fields:
+            initial_state[field] = ""
+
+    return initial_state
+
+
+async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
     """Run the complete optimization pipeline end-to-end.
 
-    Executes the optimization pipeline with iterative refinement:
+    Executes the optimization pipeline with iterative refinement through dynamically
+    configured phases:
     1. Summarization: Generates environment, component, and behavior summaries
     2. Analysis: Produces structured optimization guidance with static analysis
     3. Optimization: Applies safe code improvements
-    4. Correctness Check: Validates applied changes for correctness
+    4. Correctness Check: Validates applied changes for correctness and quality
     5. Loop: Conditionally iterates up to MAX_ITERATIONS times
+
+    State fields are dynamically generated from phase definitions:
+    - Phase outputs are automatically added to state based on agent.return_state_field
+    - Each phase receives the updated state from all previous phases
+    - Iteration count controls loop continuation
 
     Args:
         code_path: Path to the repository or code directory to optimize
 
     Returns:
-        Final pipeline state containing:
+        Final pipeline state containing dynamically generated fields:
         - code_path: Input repository path
         - summary_text: Combined summaries from final iteration
         - analysis_report: Structured AnalysisReport JSON from final iteration
         - optimization_report: Final OptimizationReport JSON from final iteration
-        - correctness_report: Correctness check results from final iteration
+        - analysis_result: Detailed correctness analysis from final iteration
+        - correctness_verdict: Yes/No verdict from final iteration
         - iteration_count: Number of iterations completed
     """
     logger.info(f"Starting complete optimization pipeline for {code_path}")
+    logger.info(f"Pipeline phases: {[p.name for p in _PIPELINE_PHASES]}")
+    logger.info(f"Dynamic state fields: {list(PipelineState.__annotations__.keys())}")
 
     workflow = build_complete_pipeline()
 
-    final_state: PipelineState = workflow.invoke(
-        {
-            "code_path": code_path,
-            "summary_text": "",
-            "analysis_report": "",
-            "optimization_report": "",
-            "correctness_report": "",
-            "iteration_count": 0,
-        }
-    )
+    initial_state = _build_initial_state(code_path)
+    final_state: PipelineState = await workflow.ainvoke(initial_state)
 
     logger.info("Complete optimization pipeline finished")
     return final_state

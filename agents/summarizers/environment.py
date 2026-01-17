@@ -21,7 +21,7 @@ from tools.environment import (analyze_repo_structure, check_git_config,
                                read_pyproject_toml, read_requirements_txt)
 
 
-class EnvironmentSummarizer(BaseAgent):
+class EnvironmentSummarizerAgent(BaseAgent):
    """Agent for analyzing repository environment and configuration.
 
    This agent systematically analyzes a repository's structure and configuration

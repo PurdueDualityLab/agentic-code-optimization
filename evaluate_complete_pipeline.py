@@ -1,15 +1,17 @@
 """Evaluation script for the complete optimization pipeline.
 
-This script runs the complete three-phase optimization pipeline:
+This script runs the complete four-phase optimization pipeline:
 1. Summarization (environment, component, behavior summaries)
 2. Analysis (structured optimization guidance)
 3. Optimization (apply safe code improvements)
+4. Correctness Check (validate applied changes for correctness)
 
 Usage:
     python evaluate_complete_pipeline.py                  # Run on current project
     python evaluate_complete_pipeline.py <repo_path>      # Run on specific repository
 """
 
+import asyncio
 import json
 import logging
 import sys
@@ -25,7 +27,7 @@ from workflows.complete_pipeline import MAX_ITERATIONS, orchestrate_complete_pip
 load_dotenv()
 
 
-def evaluate_complete_pipeline(repo_path: str) -> None:
+async def evaluate_complete_pipeline(repo_path: str) -> None:
     """Evaluate the complete optimization pipeline on a given repository.
 
     Args:
@@ -55,8 +57,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
     # Display pipeline configuration
     print("PIPELINE CONFIGURATION:")
     print("  Name: Complete Optimization Pipeline")
-    print("  Phases: 3 (Summarization, Analysis, Optimization)")
-    print("  Nodes: 4 (summarization, static_analysis, analysis, optimization)")
+    print("  Phases: 4 (Summarization, Analysis, Optimization, Correctness Check)")
+    print("  Nodes: 5 (summarization, analysis, optimization, correctness_check, loop_decision)")
     print()
 
     # Display analysis target
@@ -77,8 +79,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
         )
         start_time = time.time()
 
-        # Execute the complete pipeline
-        final_state = orchestrate_complete_pipeline(str(repo_path_obj.absolute()))
+        # Execute the complete pipeline (async)
+        final_state = await orchestrate_complete_pipeline(str(repo_path_obj.absolute()))
 
         execution_time = time.time() - start_time
         logger.info(
@@ -88,7 +90,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
         # Extract results from final state
         optimization_report = final_state.get("optimization_report", "")
         analysis_report = final_state.get("analysis_report", "")
-        correctness_report = final_state.get("correctness_report", "")
+        analysis_result = final_state.get("analysis_result", "")
+        correctness_verdict = final_state.get("correctness_verdict", "")
         summary_text = final_state.get("summary_text", "")
         iteration_count = final_state.get("iteration_count", 0)
 
@@ -112,7 +115,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
     print(f"  Summary Text Length: {len(summary_text)} characters")
     print(f"  Analysis Report Length: {len(analysis_report)} characters")
     print(f"  Optimization Report Length: {len(optimization_report)} characters")
-    print(f"  Correctness Report Length: {len(correctness_report)} characters")
+    print(f"  Analysis Result Length: {len(analysis_result)} characters")
+    print(f"  Correctness Verdict Length: {len(correctness_verdict)} characters")
     print()
 
     # Parse and display analysis report if available
@@ -163,15 +167,18 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
         print("  (Could not parse optimization report)")
         print()
 
-    # Parse and display correctness check report if available
+    # Display correctness check results
     print("CORRECTNESS CHECK RESULTS:")
     try:
-        if correctness_report:
-            print(f"  Report Length: {len(correctness_report)} characters")
-            print(f"  Report Preview: {correctness_report[:200]}...")
-            print()
+        if analysis_result:
+            print(f"  Analysis Result Length: {len(analysis_result)} characters")
+            print(f"  Analysis Result Preview: {analysis_result[:200]}...")
+        if correctness_verdict:
+            print(f"  Verdict Length: {len(correctness_verdict)} characters")
+            print(f"  Verdict Preview: {correctness_verdict[:100]}...")
+        print()
     except Exception:
-        print("  (Could not parse correctness report)")
+        print("  (Could not display correctness results)")
         print()
 
     # Save execution results to run directory
@@ -180,7 +187,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
             {
                 "optimization_report": optimization_report,
                 "analysis_report": analysis_report,
-                "correctness_report": correctness_report,
+                "analysis_result": analysis_result,
+                "correctness_verdict": correctness_verdict,
                 "summary_text": summary_text,
                 "iteration_count": iteration_count,
             },
@@ -195,7 +203,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
         "summary_length": len(summary_text),
         "analysis_length": len(analysis_report),
         "optimization_length": len(optimization_report),
-        "correctness_length": len(correctness_report),
+        "analysis_result_length": len(analysis_result),
+        "correctness_verdict_length": len(correctness_verdict),
     }
 
     # Add analysis metrics if available
@@ -227,7 +236,8 @@ def evaluate_complete_pipeline(repo_path: str) -> None:
             {
                 "optimization_report": optimization_report,
                 "analysis_report": analysis_report,
-                "correctness_report": correctness_report,
+                "analysis_result": analysis_result,
+                "correctness_verdict": correctness_verdict,
                 "iteration_count": iteration_count,
             },
             indent=2,
@@ -255,7 +265,7 @@ def main() -> None:
         # Use current project directory as default
         repo_path = str(Path(__file__).parent.absolute())
 
-    evaluate_complete_pipeline(repo_path)
+    asyncio.run(evaluate_complete_pipeline(repo_path))
 
 
 if __name__ == "__main__":

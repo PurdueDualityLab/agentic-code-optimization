@@ -151,8 +151,7 @@ def _service_inventory(configuration: Dict[str, Any], max_items: int) -> Dict[st
         },
     }
 
-@tool
-def run_static_analysis(root_path: str, max_items: int = 200) -> Dict[str, Any]:
+def runner_static_analysis(root_path: str, max_items: int = 200) -> Dict[str, Any]:
     """Run static analysis tools on a codebase and return signals.
 
     Executes static analysis to gather metrics about code structure,
@@ -438,7 +437,7 @@ def run_static_analysis(root_path: str, max_items: int = 200) -> Dict[str, Any]:
 
 def run_static_analysis_json(root_path: str, max_items: int = 200) -> str:
     """Return static analysis results as JSON string."""
-    return json.dumps(run_static_analysis(root_path, max_items=max_items), indent=2)
+    return json.dumps(runner_static_analysis(root_path, max_items=max_items), indent=2)
 
 
 def main() -> None:
@@ -450,7 +449,7 @@ def main() -> None:
     parser.add_argument("--output", help="Write JSON to file")
     args = parser.parse_args()
 
-    result = run_static_analysis(args.path, max_items=args.max_items)
+    result = runner_static_analysis(args.path, max_items=args.max_items)
     output = json.dumps(result, indent=2)
 
     if args.output:
