@@ -82,6 +82,7 @@ class AnalyzerAgent(BaseAgent):
 - Distributed systems and service-to-service communication
 - Data access patterns and storage bottlenecks
 - Observability signals and operational constraints
+- You should use the run_static_analysis, atleast once, to gather static analysis signals from the codebase.
 
 Your task is to analyze a codebase using summary text and static analysis signals, then produce
 actionable optimization guidance for a downstream optimizer agent.
@@ -127,7 +128,6 @@ Input is JSON with:
   - Limit edits to files listed in suggested_focus_files.
   - If a priority lacks concrete evidence, treat it as needs_inspection until confirmed.
 
-Output: JSON only, no prose.
 Keys:
 - priorities: list of {title, rationale, evidence, impact, confidence}
 - risks_and_gaps: list of {issue, impact, evidence}
