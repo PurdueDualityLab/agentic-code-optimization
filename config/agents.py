@@ -18,6 +18,7 @@ class AgentConfig(SubSectionParser):
         default_provider: Default LLM provider to use (ollama, openai, anthropic)
         timeout: Timeout for LLM calls in seconds
         verbose: Enable verbose logging for agent execution
+        max_tokens: Maximum context tokens before truncation (None = no limit)
     """
 
     SECTION: ClassVar[str] = "agents"
@@ -27,3 +28,4 @@ class AgentConfig(SubSectionParser):
     default_provider: str = "ollama"
     timeout: int = 60
     verbose: bool = False
+    max_tokens: Optional[int] = None

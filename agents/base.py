@@ -14,6 +14,7 @@ from typing import Any
 
 from beautilog import logger
 from langchain.agents import create_agent
+from langchain_core.messages import trim_messages
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
@@ -83,6 +84,14 @@ class BaseAgent:
             "system_prompt": self.prompt,
             "name": self.name,
         }
+
+        # Add token truncation middleware if max_tokens configured
+        if self.config.max_tokens:
+            agent_params["messages_modifier"] = trim_messages(
+                max_tokens=self.config.max_tokens,
+                strategy="last",
+                token_counter=self.llm,
+            )
 
         # Add optional structured output format
         if self.structured_output_type is not None:

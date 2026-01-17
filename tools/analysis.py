@@ -31,7 +31,16 @@ def _read_json(source: str) -> Dict[str, Any]:
         text = path.read_text(encoding="utf-8", errors="ignore")
     else:
         text = source
-    return json.loads(text)
+
+    # Handle empty or whitespace-only input
+    if not text or not text.strip():
+        return {}
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Return empty dict for invalid JSON
+        return {}
 
 
 def _parse_summary_sections(text: str) -> Dict[str, List[str]]:
@@ -418,7 +427,7 @@ async def search_codebase(
 @tool
 async def build_analysis_bundle(
     summary_source: str,
-    static_source: str,
+    static_source: str = "",
     max_items: int = 12,
     max_excerpt_chars: int = 0,
 ) -> str:
@@ -429,7 +438,7 @@ async def build_analysis_bundle(
 
     Args:
         summary_source (str): **REQUIRED** Path to summary file or raw summary text
-        static_source (str): **REQUIRED** Path to static analysis JSON file or raw JSON string
+        static_source (str): Path to static analysis JSON file or raw JSON string. If empty, will generate bundle without static analysis.
         max_items (int): Maximum number of items to include per category (hotspots, clients, etc.). Default: 12
         max_excerpt_chars (int): Maximum characters for code excerpts (0=no excerpts). Default: 0
 
@@ -437,7 +446,10 @@ async def build_analysis_bundle(
         str: Compact analysis bundle as formatted text combining all inputs
 
     Examples:
-        # Build bundle with default settings
+        # Build bundle with summary only
+        build_analysis_bundle(summary_source="/tmp/summary.txt")
+
+        # Build bundle with summary and static analysis
         build_analysis_bundle(summary_source="/tmp/summary.txt", static_source="/tmp/analysis.json")
 
         # Build bundle with more items and excerpts
