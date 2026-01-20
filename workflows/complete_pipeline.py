@@ -28,7 +28,7 @@ from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
 from .summary_orchestrator import orchestrate_summarizers
 
 # Maximum iterations for the optimization loop
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 1
 
 
 class PipelinePhase:

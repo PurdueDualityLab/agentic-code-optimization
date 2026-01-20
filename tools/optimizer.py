@@ -26,7 +26,12 @@ def _read_json(source: str) -> Dict[str, Any]:
         text = path.read_text(encoding="utf-8", errors="ignore")
     else:
         text = source
-    return json.loads(text)
+    if not text or not text.strip():
+        return {}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {}
 
 
 def _resolve_path(file_path: str, root_path: str) -> Path | None:
