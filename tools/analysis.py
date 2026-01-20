@@ -12,8 +12,6 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.tools import tool
 
-from static_analisis_tools.runner import runner_static_analysis
-
 MAX_SNIPPET_LINES = 400
 MAX_SNIPPET_CHARS = 8000
 
@@ -624,37 +622,3 @@ async def build_analysis_bundle(
         bundle["summary_excerpt"] = summary_text[:max_excerpt_chars]
 
     return json.dumps(bundle, indent=2)
-
-
-@tool
-async def run_static_analysis(root_path: str, max_items: int = 200) -> str:
-    """Run static analysis tools on a codebase to identify optimization opportunities.
-
-    Analyzes the codebase for:
-    - High cyclomatic complexity functions
-    - Code hotspots (frequently changed/large files)
-    - Import clients and dependencies
-    - Security findings
-    - Potential performance issues
-
-    Args:
-        root_path (str): **REQUIRED** Root directory path of the codebase to analyze
-        max_items (int): Maximum number of items to include per category. Default: 200
-
-    Returns:
-        str: JSON string with format: {
-            "signals": [{"id": "...", "severity": "...", "message": "...", "evidence": {...}}],
-            "hotspots": [{"file": "...", "score": ...}],
-            "clients": {"module": [...]},
-            "security": [...]
-        }
-
-    Examples:
-        # Run analysis on current project
-        run_static_analysis(root_path="/path/to/project")
-
-        # Run with limited items for faster results
-        run_static_analysis(root_path="/path/to/project", max_items=50)
-    """
-    result = runner_static_analysis(root_path, max_items=max_items)
-    return json.dumps(result, indent=2)
