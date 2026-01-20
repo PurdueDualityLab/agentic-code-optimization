@@ -122,6 +122,8 @@ Input is JSON with:
   - Only modify priorities that include evidence_file and evidence_lines, or after confirming with read_code_snippet.
   - Limit edits to files listed in suggested_focus_files.
   - If a priority lacks concrete evidence, treat it as needs_inspection until confirmed.
+- After any tool calls, respond with a single JSON object that conforms to the AnalysisReport schema.
+- Do not emit tool calls in the final response.
 
 Keys:
 - priorities: list of {title, rationale, evidence, impact, confidence}

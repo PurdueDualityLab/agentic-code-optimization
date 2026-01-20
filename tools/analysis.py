@@ -42,36 +42,14 @@ def _relative_path(path: Path, root: Path) -> str:
     except Exception:
         return path.as_posix()
 
-@tool
-async def read_code_snippet(
+async def _read_code_snippet_impl(
     file_path: str,
-    root_path: str = "",
-    start_line: int = 1,
-    max_lines: int = 200,
-    max_chars: int = 4000,
+    root_path: str,
+    start_line: int,
+    max_lines: int,
+    max_chars: int,
 ) -> str:
-    """Read a bounded snippet from a file in the codebase.
-
-    Args:
-        file_path (str): **REQUIRED** Path to the file to read (e.g., "src/main.py", "agents/base.py")
-        root_path (str): Root directory path. Use this if file_path is relative. Defaults to current directory.
-        start_line (int): Line number to start reading from (1-indexed). Default: 1
-        max_lines (int): Maximum number of lines to read (1-400). Default: 200
-        max_chars (int): Maximum characters to return (200-8000). Default: 4000
-
-    Returns:
-        str: JSON string with format: {"file": "absolute/path", "start_line": 1, "end_line": 200, "total_lines": 500, "snippet": "file contents..."}
-
-    Examples:
-        # Read first 200 lines of a file
-        read_code_snippet(file_path="agents/base.py")
-
-        # Read specific section of a file
-        read_code_snippet(file_path="src/main.py", start_line=50, max_lines=100)
-
-        # Read with custom character limit
-        read_code_snippet(file_path="config.ini", max_chars=1000)
-    """
+    """Read a bounded snippet from a file in the codebase."""
     max_lines = max(1, min(max_lines, MAX_SNIPPET_LINES))
     max_chars = max(200, min(max_chars, MAX_SNIPPET_CHARS))
     start_line = max(1, start_line)
@@ -115,6 +93,45 @@ async def read_code_snippet(
 
 
 @tool
+async def read_code_snippet(
+    file_path: str,
+    root_path: str = "",
+    start_line: int = 1,
+    max_lines: int = 200,
+    max_chars: int = 4000,
+) -> str:
+    """Read a bounded snippet from a file in the codebase.
+
+    Args:
+        file_path (str): **REQUIRED** Path to the file to read (e.g., "src/main.py", "agents/base.py")
+        root_path (str): Root directory path. Use this if file_path is relative. Defaults to current directory.
+        start_line (int): Line number to start reading from (1-indexed). Default: 1
+        max_lines (int): Maximum number of lines to read (1-400). Default: 200
+        max_chars (int): Maximum characters to return (200-8000). Default: 4000
+
+    Returns:
+        str: JSON string with format: {"file": "absolute/path", "start_line": 1, "end_line": 200, "total_lines": 500, "snippet": "file contents..."}
+
+    Examples:
+        # Read first 200 lines of a file
+        read_code_snippet(file_path="agents/base.py")
+
+        # Read specific section of a file
+        read_code_snippet(file_path="src/main.py", start_line=50, max_lines=100)
+
+        # Read with custom character limit
+        read_code_snippet(file_path="config.ini", max_chars=1000)
+    """
+    return await _read_code_snippet_impl(
+        file_path=file_path,
+        root_path=root_path,
+        start_line=start_line,
+        max_lines=max_lines,
+        max_chars=max_chars,
+    )
+
+
+@tool
 async def read_file(
     file_path: str,
     root_path: str = "",
@@ -145,11 +162,12 @@ async def read_file(
         # Read configuration file
         read_file(file_path="config.ini", root_path="/path/to/project")
     """
-    return await read_code_snippet(
+    return await _read_code_snippet_impl(
         file_path=file_path,
         root_path=root_path,
         start_line=start_line,
         max_lines=max_lines,
+        max_chars=MAX_SNIPPET_CHARS,
     )
 
 
