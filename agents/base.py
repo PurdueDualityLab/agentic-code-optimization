@@ -80,10 +80,15 @@ class BaseAgent:
 
         # Get LLM provider
         self.llm = ProviderRegistry.get(self.provider_name, LLM)
+        model = self.llm
+        if self.structured_output_type is not None and hasattr(self.llm, "with_structured_output"):
+            wrapped = self.llm.with_structured_output(self.structured_output_type)
+            if hasattr(wrapped, "bind_tools"):
+                model = wrapped
 
         # Build create_agent parameters
         agent_params = {
-            "model": self.llm,
+            "model": model,
             "tools": self.tools,
             "system_prompt": self.prompt,
             "name": self.name,
@@ -96,10 +101,6 @@ class BaseAgent:
                 strategy="last",
                 token_counter=self.llm,
             )
-
-        # Add optional structured output format
-        if self.structured_output_type is not None:
-            agent_params["response_format"] = self.structured_output_type
 
         # Merge with any additional kwargs passed to __init__
         agent_params.update(kwargs)
