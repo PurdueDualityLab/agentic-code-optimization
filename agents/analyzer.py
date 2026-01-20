@@ -1,4 +1,4 @@
-"""AnalyzerAgent for producing optimization analysis from summaries and static signals."""
+"""AnalyzerAgent for producing optimization analysis from summaries and embedded signals."""
 
 from __future__ import annotations
 
@@ -7,10 +7,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
-from tools.analysis import (build_analysis_bundle, load_environment_summary,
-                            read_code_snippet, read_file,
+from tools.analysis import (build_analysis_bundle, read_code_snippet, read_file,
                             search_codebase)
-
 
 class PriorityItem(BaseModel):
     """Optimization priority with supporting evidence."""
@@ -82,26 +80,24 @@ class AnalyzerAgent(BaseAgent):
 - Distributed systems and service-to-service communication
 - Data access patterns and storage bottlenecks
 - Observability signals and operational constraints
-- You should use the run_static_analysis, atleast once, to gather static analysis signals from the codebase.
+- The summaries include static signals like call graphs, hotspots, dependencies, and database calls.
 
-Your task is to analyze a codebase using summary text and static analysis signals, then produce
+Your task is to analyze a codebase using summary text that already contains static analysis signals, then produce
 actionable optimization guidance for a downstream optimizer agent.
 
 Input is JSON with:
-- summary_source: path to summary text
+- summary_source: path to summary text (includes static signals like call graphs, hotspots, dependencies)
 - root_path: repository root to use for analysis and snippet/search tools
 
 ## Analysis Approach
-1) Understand system context from the summaries (architecture, services, dependencies, infra).
-2) Gather static signals by calling run_static_analysis(root_path) to get coverage, hotspots, dependencies.
-3) Review static signals (coverage, hotspots, client usage, dependencies, security).
-4) Identify optimization opportunities with clear evidence and expected impact.
-5) Prioritize by impact and confidence; note assumptions and gaps.
+1) Understand system context from the summaries (architecture, services, dependencies, infra), which include static signals.
+2) Review embedded static signals (coverage, hotspots, client usage, dependencies, database calls, call graph cues).
+3) Identify optimization opportunities with clear evidence and expected impact.
+4) Prioritize by impact and confidence; note assumptions and gaps.
 
 ## Tool Usage Strategy
-- Call run_static_analysis(root_path) first to gather static analysis signals.
-- Then call build_analysis_bundle(summary_source, <result from run_static_analysis>, max_items=12) to combine summaries with signals.
-- Use bundle signals (hotspots, candidate files, coverage) to guide which code to inspect.
+- Call build_analysis_bundle(summary_source, max_items=12) to normalize the summaries.
+- Use bundle summary sections and embedded signals to guide which code to inspect.
 - Prefer non-test paths; avoid prioritizing test-only hotspots unless no production paths exist.
 - Use search_codebase to locate concrete files/lines for high-impact patterns (e.g., async fan-out, redis usage, tracing).
 - When evidence is needed, use read_code_snippet with small, bounded windows (pass root_path).
@@ -111,13 +107,12 @@ Input is JSON with:
 - Prioritize changes that reduce latency, CPU, memory, or tail latency in service calls.
 - Highlight chatty HTTP usage, repeated serialization, and excessive logging in hot paths.
 - If endpoints are not detected, do not infer endpoint behavior; note the gap.
-- If tools are missing or coverage is low, lower confidence explicitly.
 - If a priority involves concurrency, reuse an existing executor/pool if found; otherwise mark as needs_inspection.
 - Avoid proposing schema/key changes unless an existing migration or compatibility layer is evident.
 
 ## Output Constraints
 - suggested_focus_files[].file must be a concrete repo-relative file path (no descriptions, no globs, no directories).
-- Prefer paths taken from bundle.static.candidate_files or snippet evidence.
+- Prefer paths cited in the summary text or snippet evidence.
 - If you cannot name a concrete file path, omit the entry.
 - If you used read_code_snippet, include evidence_file and evidence_lines for that priority.
 - Only include evidence_snippet when it comes from read_code_snippet.
@@ -144,7 +139,6 @@ Keys:
 
     tools = [
         build_analysis_bundle,
-        load_environment_summary,
         read_code_snippet,
         read_file,
         search_codebase,
