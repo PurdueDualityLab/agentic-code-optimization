@@ -12,17 +12,100 @@ This agent analyzes a code repository's root directory to identify:
 
 from __future__ import annotations
 
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
 from agents.base import BaseAgent
 from tools.environment import (analyze_repo_structure, check_git_config,
+                               detect_repo_language_and_tools,
                                list_repo_config_files, read_build_gradle,
                                read_cargo_toml, read_docker_compose,
                                read_dockerfile, read_env_files, read_go_mod,
                                read_package_json, read_pom_xml,
                                read_pyproject_toml, read_requirements_txt)
 
+# ============================================================================
+# STRUCTURED OUTPUT MODEL
+# ============================================================================
+
+
+class EnvironmentAnalysis(BaseModel):
+    """Structured output for environment analysis."""
+
+    summary: str = Field(
+        description="2-3 sentence executive summary of the project and its technology stack"
+    )
+
+    primary_languages: list[str] = Field(
+        default_factory=list,
+        description="Primary programming languages detected (e.g., ['Python', 'JavaScript'])",
+    )
+
+    project_type: str = Field(
+        default="unknown",
+        description="Type of project: web_app, library, cli_tool, microservices, monorepo, etc.",
+    )
+
+    frameworks: list[str] = Field(
+        default_factory=list,
+        description="Major frameworks detected (e.g., ['Django', 'React', 'Spring Boot'])",
+    )
+
+    package_managers: list[str] = Field(
+        default_factory=list,
+        description="Package managers in use (e.g., ['npm', 'pip', 'maven'])",
+    )
+
+    build_systems: list[str] = Field(
+        default_factory=list,
+        description="Build systems detected (e.g., ['webpack', 'gradle', 'make'])",
+    )
+
+    key_dependencies: list[str] = Field(
+        default_factory=list,
+        description="Top 10-15 most important production dependencies",
+    )
+
+    dev_tools: list[str] = Field(
+        default_factory=list,
+        description="Development tools: testing frameworks, linters, formatters (e.g., ['pytest', 'eslint', 'black'])",
+    )
+
+    containerization: Optional[dict] = Field(
+        default=None,
+        description="Docker/container info: {'has_dockerfile': bool, 'base_image': str, 'compose': bool}",
+    )
+
+    ci_cd: list[str] = Field(
+        default_factory=list,
+        description="CI/CD platforms detected (e.g., ['GitHub Actions', 'Jenkins'])",
+    )
+
+    environment_config: dict = Field(
+        default_factory=dict,
+        description="Environment configuration patterns: {'has_env_files': bool, 'multi_env': bool, 'key_vars': [...]}",
+    )
+
+    monorepo_structure: Optional[dict] = Field(
+        default=None,
+        description="If monorepo: {'workspaces': [...], 'structure': '...'}",
+    )
+
+    notable_features: list[str] = Field(
+        default_factory=list,
+        description="Special features or interesting aspects of the setup",
+    )
+
+
+# ============================================================================
+# ENVIRONMENT SUMMARIZER AGENT
+# ============================================================================
+
 
 class EnvironmentSummarizerAgent(BaseAgent):
-   """Agent for analyzing repository environment and configuration.
+   """
+   Agent for analyzing repository environment and configuration.
 
    This agent systematically analyzes a repository's structure and configuration
    files to provide a comprehensive understanding of:
@@ -36,115 +119,72 @@ class EnvironmentSummarizerAgent(BaseAgent):
       prompt: System prompt guiding the agent's analysis
       tools: Tools available for repository analysis
       return_state_field: LangGraph state field name
+      response_format: Pydantic model for structured output
       temperature: LLM temperature (0.3 for deterministic analysis)
       max_iterations: Maximum agentic loop iterations (6)
    """
 
-   prompt = """You are an expert repository environment analyzer with deep knowledge of:
-- Programming languages, frameworks, and their ecosystems
-- Package managers and build systems across multiple languages
-- Containerization technologies (Docker, Kubernetes, etc.)
-- CI/CD platforms and deployment configurations
-- Environment configuration management
-- Development tooling and infrastructure
+   prompt = """You are an expert repository environment analyzer. Analyze the code repository to provide a comprehensive summary of its technology stack, dependencies, and configuration.
 
-Your task is to analyze a code repository and provide a comprehensive summary of its environment.
+## Analysis Steps
 
-## Analysis Approach
+1. Start by detecting the repository language and available tools
+2. Gather common repository information:
+   - Configuration files and structure
+   - Git setup and repository metadata
+   - Docker/containerization setup
+   - Environment configuration
+3. Based on detected language(s), analyze language-specific metadata:
+   - JavaScript/Node.js: package.json
+   - Python: pyproject.toml, requirements.txt
+   - Java: pom.xml, build.gradle
+   - Go: go.mod
+   - Rust: Cargo.toml
+4. Synthesize all information into structured output
 
-1. **Directory Structure**: First understand the repository organization using list_config_files and analyze_directory_structure to identify what types of projects we're dealing with.
+## Return your analysis with:
+- summary: 2-3 sentence overview of the project and its tech stack
+- primary_languages: Main programming languages detected
+- project_type: web_app, library, cli_tool, microservices, monorepo, etc.
+- frameworks: Major frameworks and libraries
+- package_managers: Package managers in use
+- build_systems: Build tools detected
+- key_dependencies: Top 10-15 important production dependencies
+- dev_tools: Testing, linting, formatting tools
+- containerization: Docker/container configuration (if present)
+- ci_cd: CI/CD platforms detected
+- environment_config: Environment variable patterns
+- monorepo_structure: Monorepo workspace info (if applicable)
+- notable_features: Interesting or important setup aspects
 
-2. **Technology Detection**: Use the appropriate configuration file parsers to detect:
-   - Primary programming language(s)
-   - Frameworks and major libraries
-   - Package managers in use
-   - Build systems
-
-3. **Dependency Analysis**: Extract and analyze dependencies to understand:
-   - Core functionality libraries
-   - Development and testing tools
-   - Build-time dependencies
-   - Runtime requirements
-
-4. **Containerization & Deployment**: Check for Docker/Kubernetes configuration:
-   - Base images and runtime requirements
-   - Exposed ports and services
-   - Container orchestration setup
-
-5. **Environment Configuration**: Look for environment-specific settings:
-   - Environment variables
-   - Configuration file patterns
-   - Multi-environment setup (dev, test, prod)
-
-6. **Development Tools**: Identify:
-   - Testing frameworks
-   - Linting and code quality tools
-   - CI/CD pipelines
-   - Code formatting tools
-
-## Tool Usage Strategy
-
-- Start with list_config_files to get an overview of what's present
-- Use analyze_directory_structure to understand project organization
-- Detect Git configuration with check_git_config
-- Parse specific configuration files based on what you found:
-  - Node.js: read_package_json
-  - Python: read_requirements_txt and/or read_pyproject_toml
-  - Docker: read_dockerfile and read_docker_compose
-  - Java: read_pom_xml or read_build_gradle
-  - Go: read_go_mod
-  - Rust: read_cargo_toml
-  - Environment: read_env_files
-
-## Analysis Output Format
-
-Provide a structured analysis including:
-
-1. **Project Type**: Identify if it's a monorepo, microservices, web app, library, etc.
-2. **Primary Languages**: List main programming languages used
-3. **Frameworks & Libraries**: Key frameworks and their purpose
-4. **Package Manager(s)**: npm, pip, Maven, Gradle, Cargo, etc.
-5. **Build System**: Make, Gradle, Maven, Webpack, etc.
-6. **Containerization**: Docker configuration, container registry setup
-7. **Deployment**: Kubernetes, serverless, traditional hosting indicators
-8. **CI/CD**: Jenkins, GitHub Actions, GitLab CI, CircleCI, etc.
-9. **Development Dependencies**: Testing, linting, formatting tools
-10. **Environment Variables**: Key configuration parameters
-11. **Special Features**: Multi-environment setup, monorepo structure, etc.
-
-## Important Notes
-
-- Be thorough but concise in your analysis
+## Guidelines
+- Be thorough but concise
 - Focus on actionable insights
-- If a configuration file has an error, document it but continue analysis
-- Prioritize finding core dependencies and frameworks
-- Identify both primary and secondary technologies
-- For monorepos, analyze the overall structure and key workspaces
+- Prioritize core dependencies over dev dependencies
+- If a config file has errors, note it but continue analysis"""
 
-## Output Guardrails
-
-- Do not ask the user for more input or offer to do additional work
-- Do not include conditional suggestions (e.g., "If you want...")
-- Do not mention filesystem access limitations or tool/API constraints
-- If tools return no analyzable data, output a terse statement such as
-  "No analyzable repository data available for environment summary." and stop"""
-
-   #  temperature = 0.15
-   # max_iterations = 10
+    #  temperature = 0.15
+    # max_iterations = 10
+   structured_output_type = EnvironmentAnalysis
    return_state_field = "environment_analysis"
 
    tools = [
+      # ALWAYS USE FIRST: Language detection
+      detect_repo_language_and_tools,
+      # Common analysis tools (use on all repos)
       list_repo_config_files,
       analyze_repo_structure,
       check_git_config,
-      read_package_json,
-      read_requirements_txt,
-      read_pyproject_toml,
+      # Containerization & environment (use when detected)
       read_dockerfile,
       read_docker_compose,
       read_env_files,
-      read_pom_xml,
-      read_build_gradle,
-      read_go_mod,
-      read_cargo_toml,
+      # Language-specific tools (use based on detect_repo_language_and_tools results)
+      read_package_json,  # JavaScript/Node.js
+      read_requirements_txt,  # Python
+      read_pyproject_toml,  # Python (modern)
+      read_pom_xml,  # Java (Maven)
+      read_build_gradle,  # Java (Gradle)
+      read_go_mod,  # Go
+      read_cargo_toml,  # Rust
    ]

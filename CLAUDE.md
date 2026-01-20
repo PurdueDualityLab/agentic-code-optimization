@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Agentic Code Optimizer** is a LangGraph-based multi-agent framework for code optimization. It provides a declarative system for building AI agents that analyze and optimize code across multiple languages using pluggable LLM providers (Ollama, OpenAI, Anthropic).
 
+**Requirements**: Python 3.11+ (required for built-in `tomllib` support)
+
 **Current Status**: Framework complete with working agents, logging, metrics tracking, and run management.
 
 ## Architecture

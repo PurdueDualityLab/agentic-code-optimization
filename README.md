@@ -132,6 +132,10 @@ agentic-code-optimization/
 └── .gitignore
 ```
 
+## Requirements
+
+- **Python 3.11+** (required for built-in `tomllib` support)
+
 ## Quick Start
 
 ### Installation
@@ -141,7 +145,7 @@ agentic-code-optimization/
 git clone <repository-url>
 cd agentic-code-optimization
 
-# Create virtual environment
+# Create virtual environment (Python 3.11+ required)
 python3.11 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
