@@ -15,7 +15,7 @@ ProviderRegistry["openai"] = ChatOpenAI(
     max_tokens=openai_config.max_tokens,
     openai_api_key=openai_config.api_key,
     organization=openai_config.organization_id,
-    request_timeout=openai_config.timeout,
+    timeout=openai_config.timeout,
 )
 
 anthropic_config = ConfigParser.get(AnthropicConfig)
@@ -24,7 +24,7 @@ ProviderRegistry["anthropic"] = ChatAnthropic(
     temperature=anthropic_config.temperature,
     max_tokens=anthropic_config.max_tokens,
     anthropic_api_key=anthropic_config.api_key,
-    request_timeout=anthropic_config.timeout,
+    timeout=anthropic_config.timeout,
 )
 
 ollama_config = ConfigParser.get(OllamaConfig)

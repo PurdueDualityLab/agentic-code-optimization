@@ -1,2 +1,2 @@
-from .complete_pipeline import build_complete_pipeline
+from .complete_pipeline import orchestrate_complete_pipeline
 from .summary_orchestrator import orchestrate_summarizers

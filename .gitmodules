@@ -1,3 +1,6 @@
 [submodule "DeathStarBench"]
 	path = DeathStarBench
 	url = https://github.com/delimitrou/DeathStarBench
+[submodule "TeaStore"]
+	path = TeaStore
+	url = git@github.com:DescartesResearch/TeaStore.git
