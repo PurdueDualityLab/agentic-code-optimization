@@ -31,70 +31,70 @@ from tools.environment import (analyze_repo_structure, check_git_config,
 
 
 class EnvironmentAnalysis(BaseModel):
-    """Structured output for environment analysis."""
+    """Structured output for environment analysis focused on architectural characteristics."""
 
     summary: str = Field(
-        description="2-3 sentence executive summary of the project and its technology stack"
+        description="2-3 sentence executive summary of the project's computational characteristics and architecture"
     )
 
     primary_languages: list[str] = Field(
         default_factory=list,
-        description="Primary programming languages detected (e.g., ['Python', 'JavaScript'])",
+        description="Primary programming languages detected (e.g., ['Python', 'C++', 'CUDA'])",
     )
 
     project_type: str = Field(
         default="unknown",
-        description="Type of project: web_app, library, cli_tool, microservices, monorepo, etc.",
+        description="Type of project: scientific_computing, hpc, ml_framework, signal_processing, graphics, general_compute, etc.",
     )
 
     frameworks: list[str] = Field(
         default_factory=list,
-        description="Major frameworks detected (e.g., ['Django', 'React', 'Spring Boot'])",
+        description="Computational frameworks detected (e.g., ['NumPy', 'CUDA', 'OpenMP', 'MPI', 'TensorFlow'])",
     )
 
-    package_managers: list[str] = Field(
+    target_architectures: list[str] = Field(
         default_factory=list,
-        description="Package managers in use (e.g., ['npm', 'pip', 'maven'])",
+        description="Target hardware architectures mentioned or inferred (e.g., ['x86-64', 'ARM', 'GPU', 'SIMD-capable systems'])",
     )
 
-    build_systems: list[str] = Field(
-        default_factory=list,
-        description="Build systems detected (e.g., ['webpack', 'gradle', 'make'])",
-    )
-
-    key_dependencies: list[str] = Field(
-        default_factory=list,
-        description="Top 10-15 most important production dependencies",
-    )
-
-    dev_tools: list[str] = Field(
-        default_factory=list,
-        description="Development tools: testing frameworks, linters, formatters (e.g., ['pytest', 'eslint', 'black'])",
-    )
-
-    containerization: Optional[dict] = Field(
-        default=None,
-        description="Docker/container info: {'has_dockerfile': bool, 'base_image': str, 'compose': bool}",
-    )
-
-    ci_cd: list[str] = Field(
-        default_factory=list,
-        description="CI/CD platforms detected (e.g., ['GitHub Actions', 'Jenkins'])",
-    )
-
-    environment_config: dict = Field(
+    cpu_profile: dict = Field(
         default_factory=dict,
-        description="Environment configuration patterns: {'has_env_files': bool, 'multi_env': bool, 'key_vars': [...]}",
+        description="CPU characteristics from code analysis: {'vectorization': bool, 'simd_level': 'SSE/AVX/AVX-512', 'parallelization': 'OpenMP/pthreads/etc.', 'cache_aware': bool}",
     )
 
-    monorepo_structure: Optional[dict] = Field(
-        default=None,
-        description="If monorepo: {'workspaces': [...], 'structure': '...'}",
+    memory_profile: dict = Field(
+        default_factory=dict,
+        description="Memory characteristics: {'access_pattern': 'sequential/random/strided', 'bandwidth_sensitive': bool, 'memory_intensive': bool, 'working_set_estimate': str}",
+    )
+
+    parallelization_model: str = Field(
+        default="unknown",
+        description="Parallelization approach: data_parallel, task_parallel, shared_memory, distributed, gpu_accelerated, hybrid, or unknown",
+    )
+
+    simd_capabilities: str = Field(
+        default="",
+        description="SIMD/vectorization capabilities detected: scalar, sse, avx, avx2, avx-512, neon, wasm-simd, or unknown",
+    )
+
+    data_characteristics: dict = Field(
+        default_factory=dict,
+        description="Data parallelism patterns: {'data_parallel': bool, 'fine_grained': bool, 'stencil_operations': bool, 'irregular_access': bool}",
+    )
+
+    performance_optimization_targets: list[str] = Field(
+        default_factory=list,
+        description="Performance characteristics the code targets (e.g., ['throughput', 'latency', 'memory_bandwidth', 'cache_efficiency'])",
+    )
+
+    computational_characteristics: dict = Field(
+        default_factory=dict,
+        description="Computational properties: {'compute_intensive': bool, 'io_intensive': bool, 'communication_intensive': bool, 'synchronization_heavy': bool}",
     )
 
     notable_features: list[str] = Field(
         default_factory=list,
-        description="Special features or interesting aspects of the setup",
+        description="Special architectural or performance-related aspects (e.g., ['custom SIMD kernels', 'GPU offloading', 'cache-oblivious algorithms'])",
     )
 
 
@@ -124,44 +124,48 @@ class EnvironmentSummarizerAgent(BaseAgent):
       max_iterations: Maximum agentic loop iterations (6)
    """
 
-   prompt = """You are an expert repository environment analyzer. Analyze the code repository to provide a comprehensive summary of its technology stack, dependencies, and configuration.
+   prompt = """You are an expert computational architect analyzing a repository to understand its hardware and performance characteristics.
 
-## Analysis Steps
+Analyze the codebase to determine:
+1. What computational problems does this code solve?
+2. What hardware architectures is it targeting or optimized for?
+3. What parallelization strategies does it use?
+4. What are the memory and compute patterns?
+5. What performance optimization approaches are evident?
 
-1. Start by detecting the repository language and available tools
-2. Gather common repository information:
-   - Configuration files and structure
-   - Git setup and repository metadata
-   - Docker/containerization setup
-   - Environment configuration
-3. Based on detected language(s), analyze language-specific metadata:
-   - JavaScript/Node.js: package.json
-   - Python: pyproject.toml, requirements.txt
-   - Java: pom.xml, build.gradle
-   - Go: go.mod
-   - Rust: Cargo.toml
-4. Synthesize all information into structured output
+## Analysis Focus Areas
 
-## Return your analysis with:
-- summary: 2-3 sentence overview of the project and its tech stack
-- primary_languages: Main programming languages detected
-- project_type: web_app, library, cli_tool, microservices, monorepo, etc.
-- frameworks: Major frameworks and libraries
-- package_managers: Package managers in use
-- build_systems: Build tools detected
-- key_dependencies: Top 10-15 important production dependencies
-- dev_tools: Testing, linting, formatting tools
-- containerization: Docker/container configuration (if present)
-- ci_cd: CI/CD platforms detected
-- environment_config: Environment variable patterns
-- monorepo_structure: Monorepo workspace info (if applicable)
-- notable_features: Interesting or important setup aspects
+- **Programming Languages**: Computational languages used (C++, CUDA, SIMD, etc.)
+- **Computational Frameworks**: Libraries for HPC, ML, signal processing, graphics, etc.
+- **Target Architectures**: x86, ARM, GPU, FPGA, or specialized hardware mentioned in code
+- **Parallelization**: OpenMP, MPI, GPU acceleration, threading models, SIMD vectorization
+- **Memory Patterns**: Sequential access, strided, random, memory bandwidth requirements
+- **Data Characteristics**: Data-parallel vs task-parallel, fine-grained vs coarse-grained
+- **Performance Targets**: Throughput, latency, memory efficiency, cache optimization
+- **Computational Properties**: Compute-intensive, I/O-intensive, communication-heavy
+- **Optimization Techniques**: Vectorization, loop tiling, cache-aware algorithms, kernel fusion
+
+## Return Structured Analysis:
+- summary: 2-3 sentences on computational characteristics and target hardware
+- primary_languages: Languages used (C++, CUDA, Fortran, Python, etc.)
+- project_type: scientific_computing, hpc, ml_framework, signal_processing, graphics, general_compute
+- frameworks: Computational frameworks (NumPy, CUDA, OpenMP, MPI, TensorFlow, etc.)
+- target_architectures: Hardware targets (x86-64, ARM, GPU, specialized hardware)
+- cpu_profile: SIMD levels (SSE/AVX/AVX-512), parallelization methods, cache awareness
+- memory_profile: Access patterns, bandwidth sensitivity, memory intensity, working set size
+- parallelization_model: data_parallel, task_parallel, shared_memory, distributed, gpu_accelerated, hybrid
+- simd_capabilities: SIMD support level detected
+- data_characteristics: Fine-grained parallelism, stencil patterns, irregular access
+- performance_optimization_targets: What performance metrics matter (throughput, latency, etc.)
+- computational_characteristics: Compute vs I/O vs communication intensity
+- notable_features: Performance-critical algorithms, custom kernels, GPU offloading, etc.
 
 ## Guidelines
-- Be thorough but concise
-- Focus on actionable insights
-- Prioritize core dependencies over dev dependencies
-- If a config file has errors, note it but continue analysis"""
+- Focus on computational and architectural aspects, not build/deployment infrastructure
+- Look for evidence in code comments, macro names, compiler flags, library usage
+- Infer from algorithms: loops with parallelization pragmas, vectorization patterns, GPU kernels
+- Consider memory layout and access patterns from code structure
+- Identify performance-critical bottlenecks"""
 
     #  temperature = 0.15
     # max_iterations = 10
@@ -175,10 +179,6 @@ class EnvironmentSummarizerAgent(BaseAgent):
       list_repo_config_files,
       analyze_repo_structure,
       check_git_config,
-      # Containerization & environment (use when detected)
-      read_dockerfile,
-      read_docker_compose,
-      read_env_files,
       # Language-specific tools (use based on detect_repo_language_and_tools results)
       read_package_json,  # JavaScript/Node.js
       read_requirements_txt,  # Python
