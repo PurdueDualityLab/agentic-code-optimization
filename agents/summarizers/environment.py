@@ -20,8 +20,7 @@ from agents.base import BaseAgent
 from tools.environment import (analyze_repo_structure, check_git_config,
                                detect_repo_language_and_tools,
                                list_repo_config_files, read_build_gradle,
-                               read_cargo_toml, read_docker_compose,
-                               read_dockerfile, read_env_files, read_go_mod,
+                               read_cargo_toml, read_go_mod,
                                read_package_json, read_pom_xml,
                                read_pyproject_toml, read_requirements_txt)
 

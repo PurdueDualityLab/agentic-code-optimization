@@ -1,4 +1,4 @@
 from .agents import AgentConfig
 from .parser import ConfigParser
-from .providers import (AnthropicConfig, BaseProviderConfig, OllamaConfig,
-                        OpenAIConfig)
+from .providers import (AnthropicConfig, BaseProviderConfig, GeminiConfig,
+                        OllamaConfig, OpenAIConfig)
