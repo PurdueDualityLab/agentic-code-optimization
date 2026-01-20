@@ -173,6 +173,13 @@ class BaseAgent:
         final_result = None
         input_messages = {"messages": [{"role": "user", "content": input_text}]}
 
+        if "config" not in invoke_kwargs:
+            invoke_kwargs["config"] = {"recursion_limit": self.config.recursion_limit}
+        elif isinstance(invoke_kwargs["config"], dict):
+            invoke_kwargs["config"].setdefault(
+                "recursion_limit", self.config.recursion_limit
+            )
+
         async for event in self.agent.astream_events(
             input_messages,
             version="v2",
@@ -219,6 +226,11 @@ class BaseAgent:
             if messages:
                 # Get the last message's content
                 last_message = messages[-1]
+                
+                # Prefer .text when available (avoids Gemini extras/signature)
+                if hasattr(last_message, "text") and isinstance(last_message.text, str):
+                    return last_message.text
+                
                 if hasattr(last_message, "content"):
                     content = last_message.content
                     # If content is already a string, return it
