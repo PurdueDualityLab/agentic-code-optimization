@@ -5,7 +5,7 @@ A multi-agent code optimization system built with LangGraph that analyzes and op
 ## Features
 
 - **Multi-Phase Optimization**: Two-phase architecture with parallel summarization and sequential optimization
-- **Provider Agnostic**: Support for Ollama (local), OpenAI, Anthropic, and custom providers with easy switching
+- **Provider Agnostic**: Support for Ollama (local), OpenAI, Anthropic, Gemini, and custom providers with easy switching
 - **Multi-Language**: Optimize Python, JavaScript, TypeScript, Java, and more
 - **Extensible Architecture**: Clean base classes for easy agent and provider development
 - **Parallel Processing**: LangGraph-based workflow with parallel summarization agents
@@ -169,6 +169,9 @@ pip install -r requirements.txt
    # Anthropic Claude
    ANTHROPIC_API_KEY=sk-ant-...
 
+   # Gemini
+   GEMINI_API_KEY=...
+
    # Ollama (local, no API key needed)
    OLLAMA_BASE_URL=http://localhost:11434
    ```
@@ -191,6 +194,10 @@ pip install -r requirements.txt
    [anthropic]
    api_key = ${ANTHROPIC_API_KEY}
    model = claude-3-5-sonnet-20241022
+
+   [gemini]
+   api_key = ${GEMINI_API_KEY}
+   model = gemini-1.5-pro
    ```
 
 4. **(Optional) Use Ollama locally**:
@@ -630,7 +637,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 **Recently Implemented:**
 - ✅ Agent framework with LangGraph integration
 - ✅ Synchronous execution with comprehensive logging
-- ✅ Provider abstraction (Ollama, OpenAI, Anthropic)
+- ✅ Provider abstraction (Ollama, OpenAI, Anthropic, Gemini)
 - ✅ Configuration system (INI-based with .env support)
 - ✅ Tool binding and execution with metrics tracking
 - ✅ RunManager for execution artifact management
@@ -658,5 +665,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
-- LLM providers: [Ollama](https://ollama.ai), [OpenAI](https://openai.com), [Anthropic](https://anthropic.com)
+- LLM providers: [Ollama](https://ollama.ai), [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Gemini](https://ai.google.dev/)
 - Logging: [Beautilog](https://github.com/jmoore914/beautilog)

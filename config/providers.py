@@ -58,3 +58,16 @@ class AnthropicConfig(SubSectionParser):
     temperature: float = 0.7
     max_tokens: int = 4096
     timeout: int = 60
+
+
+@dataclass
+class GeminiConfig(SubSectionParser):
+    """Configuration for Gemini provider."""
+
+    SECTION: ClassVar[str] = "gemini"
+
+    api_key: str
+    model: str
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    timeout: int = 60
