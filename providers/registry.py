@@ -1,10 +1,11 @@
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
-from config import (AgentConfig, AnthropicConfig, ConfigParser, OllamaConfig,
-                    OpenAIConfig)
+from config import (AgentConfig, AnthropicConfig, ConfigParser, GeminiConfig,
+                    OllamaConfig, OpenAIConfig)
 
 ProviderRegistry: dict[str, BaseChatModel] = {}
 
@@ -25,6 +26,15 @@ ProviderRegistry["anthropic"] = ChatAnthropic(
     max_tokens=anthropic_config.max_tokens,
     anthropic_api_key=anthropic_config.api_key,
     timeout=anthropic_config.timeout,
+)
+
+gemini_config = ConfigParser.get(GeminiConfig)
+ProviderRegistry["gemini"] = ChatGoogleGenerativeAI(
+    model=gemini_config.model,
+    temperature=gemini_config.temperature,
+    max_output_tokens=gemini_config.max_tokens,
+    google_api_key=gemini_config.api_key,
+    timeout=gemini_config.timeout,
 )
 
 ollama_config = ConfigParser.get(OllamaConfig)

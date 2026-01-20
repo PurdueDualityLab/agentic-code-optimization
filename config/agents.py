@@ -15,7 +15,7 @@ class AgentConfig(SubSectionParser):
     Attributes:
         max_iterations: Maximum number of agentic loop iterations
         temperature: LLM temperature for determinism vs creativity (0.0-1.0)
-        default_provider: Default LLM provider to use (ollama, openai, anthropic)
+        default_provider: Default LLM provider to use (ollama, openai, anthropic, gemini)
         timeout: Timeout for LLM calls in seconds
         verbose: Enable verbose logging for agent execution
         max_tokens: Maximum context tokens before truncation (None = no limit)
