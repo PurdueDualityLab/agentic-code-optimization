@@ -428,13 +428,14 @@ libraryPathDependencies:
 # ============================================================================
 
 
-def _create_query_files(queries_dir: Path, query_text: str, rule_id: str) -> None:
+def _create_query_files(queries_dir: Path, query_text: str, rule_id: str, tool_name: str) -> None:
     """Write CodeQL query files to the specified directory.
 
     Args:
         queries_dir: Directory where query files should be written
         query_text: CodeQL query text to write
         rule_id: Rule ID to include in the single-query suite
+        tool_name: Tool name for unique directory naming
     """
     queries_dir.mkdir(parents=True, exist_ok=True)
 
@@ -449,14 +450,16 @@ def _create_query_files(queries_dir: Path, query_text: str, rule_id: str) -> Non
     (queries_dir / "teastore-analysis.qls").write_text(suite_text)
     (queries_dir / "qlpack.yml").write_text(QLPACK_YML)
 
-    logger.info(f"Created CodeQL query files in {queries_dir}")
+    logger.info(f"Created CodeQL query files in {queries_dir} for {tool_name}")
 
 
-def _run_codeql_analysis(repo_path: Path) -> Path:
+def _run_codeql_analysis(repo_path: Path, tool_name: str, queries_dir_name: str) -> Path:
     """Run CodeQL analysis using Docker container.
 
     Args:
         repo_path: Path to the TeaStore repository
+        tool_name: Tool name for unique container naming
+        queries_dir_name: Name of the queries directory
 
     Returns:
         Path to the SARIF results file
@@ -464,7 +467,13 @@ def _run_codeql_analysis(repo_path: Path) -> Path:
     Raises:
         RuntimeError: If Docker command fails
     """
-    logger.info("Running CodeQL analysis via Docker...")
+    logger.info(f"Running CodeQL analysis via Docker for {tool_name}...")
+
+    # Use unique container name based on tool
+    container_name = f"codeql-{tool_name.replace('_', '-')}"
+
+    # Use tool-specific results directory
+    results_dir_name = f"codeql-agent-results-{tool_name}"
 
     # Docker command from run-analysis.sh
     docker_cmd = [
@@ -472,17 +481,17 @@ def _run_codeql_analysis(repo_path: Path) -> Path:
         "run",
         "--rm",
         "--name",
-        "codeql-agent-docker",
+        container_name,
         "-v",
         f"{repo_path}:/opt/src",
         "-v",
-        f"{repo_path}/codeql-agent-results:/opt/results",
+        f"{repo_path}/{results_dir_name}:/opt/results",
         "-e",
         "LANGUAGE=java",
         "-e",
         "COMMAND=mvn clean compile -DskipTests -pl !utilities/tools.descartes.teastore.docker.all",
         "-e",
-        "QS=/opt/src/codeql-queries/teastore-analysis.qls",
+        f"QS=/opt/src/{queries_dir_name}/teastore-analysis.qls",
         "codeql-agent",
     ]
 
@@ -513,9 +522,9 @@ def _run_codeql_analysis(repo_path: Path) -> Path:
             error_output = "\n".join(output_lines[-20:])  # Last 20 lines
             raise RuntimeError(f"CodeQL analysis failed with exit code {return_code}:\n{error_output}")
 
-        logger.info("CodeQL analysis completed successfully")
+        logger.info(f"CodeQL analysis completed successfully for {tool_name}")
 
-        sarif_path = repo_path / "codeql-agent-results" / "issues.sarif"
+        sarif_path = repo_path / results_dir_name / "issues.sarif"
         if not sarif_path.exists():
             raise RuntimeError(f"SARIF results file not found at {sarif_path}")
 
@@ -565,15 +574,17 @@ def _parse_sarif_for_rule(sarif_path: Path, rule_id: str) -> list[dict[str, str]
     return results
 
 
-def _cleanup_analysis_files(repo_path: Path) -> None:
+def _cleanup_analysis_files(repo_path: Path, queries_dir_name: str, tool_name: str) -> None:
     """Remove temporary CodeQL analysis files and directories.
 
     Args:
         repo_path: Path to the repository where analysis files were created
+        queries_dir_name: Name of the queries directory to remove
+        tool_name: Tool name for unique results directory naming
     """
-    logger.info("Cleaning up CodeQL analysis files...")
+    logger.info(f"Cleaning up CodeQL analysis files for {tool_name}...")
 
-    queries_dir = repo_path / "codeql-queries"
+    queries_dir = repo_path / queries_dir_name
     if queries_dir.exists():
         try:
             shutil.rmtree(queries_dir)
@@ -581,7 +592,8 @@ def _cleanup_analysis_files(repo_path: Path) -> None:
         except Exception as e:
             logger.warning(f"Failed to remove {queries_dir}: {e}")
 
-    results_dir = repo_path / "codeql-agent-results"
+    results_dir_name = f"codeql-agent-results-{tool_name}"
+    results_dir = repo_path / results_dir_name
     if results_dir.exists():
         try:
             shutil.rmtree(results_dir)
@@ -590,9 +602,12 @@ def _cleanup_analysis_files(repo_path: Path) -> None:
             logger.warning(f"Failed to remove {results_dir}: {e}")
 
 
-def _run_query_tool(repo_path: str, query_text: str, rule_id: str) -> str:
-    logger.info(f"Starting TeaStore CodeQL analysis for: {repo_path}")
+def _run_query_tool(repo_path: str, query_text: str, rule_id: str, tool_name: str) -> str:
+    logger.info(f"Starting TeaStore CodeQL analysis with {tool_name} for: {repo_path}")
     repo_path_obj = Path(repo_path).resolve()
+
+    # Create unique directory names based on tool
+    queries_dir_name = f"codeql-queries-{tool_name}"
 
     # Validate repository path
     if not repo_path_obj.exists():
@@ -604,16 +619,16 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str) -> str:
         )
 
     try:
-        queries_dir = repo_path_obj / "codeql-queries"
-        _create_query_files(queries_dir, query_text, rule_id)
+        queries_dir = repo_path_obj / queries_dir_name
+        _create_query_files(queries_dir, query_text, rule_id, tool_name)
 
-        sarif_path = _run_codeql_analysis(repo_path_obj)
+        sarif_path = _run_codeql_analysis(repo_path_obj, tool_name, queries_dir_name)
         results = _parse_sarif_for_rule(sarif_path, rule_id)
 
         # Step 5: Clean up temporary files
-        _cleanup_analysis_files(repo_path_obj)
+        _cleanup_analysis_files(repo_path_obj, queries_dir_name, tool_name)
 
-        logger.info("TeaStore CodeQL analysis completed successfully")
+        logger.info(f"TeaStore CodeQL analysis completed successfully for {tool_name}")
         return json.dumps(
             {
                 "success": True,
@@ -638,7 +653,7 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str) -> str:
         )
     finally:
         try:
-            _cleanup_analysis_files(repo_path_obj)
+            _cleanup_analysis_files(repo_path_obj, queries_dir_name, tool_name)
         except Exception as cleanup_error:
             logger.warning(f"Cleanup failed after error: {cleanup_error}")
 
@@ -652,6 +667,10 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str) -> str:
 def teastore_find_microservices(repo_path: str) -> str:
     """Find TeaStore microservices for the environment summary.
 
+    Analyzes package structure to identify all microservices in the TeaStore architecture.
+    Detects significant components like servlets, endpoints, REST services, and applications.
+    Uses pattern matching on package names and class naming conventions.
+
     Returns JSON:
     {
       "success": bool,
@@ -661,12 +680,16 @@ def teastore_find_microservices(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, FIND_MICROSERVICES_QUERY, "teastore/find-microservices")
+    return _run_query_tool(repo_path, FIND_MICROSERVICES_QUERY, "teastore/find-microservices", "find_microservices")
 
 
 @tool
 def teastore_find_endpoints(repo_path: str) -> str:
     """Find TeaStore endpoints for the environment summary.
+
+    Identifies all HTTP endpoint classes including servlets, REST endpoints, and controllers.
+    Discovers the entry points where external requests are handled in the microservices.
+    Provides location information and service classification for each endpoint.
 
     Returns JSON:
     {
@@ -677,12 +700,16 @@ def teastore_find_endpoints(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, FIND_ENDPOINTS_QUERY, "teastore/find-endpoints")
+    return _run_query_tool(repo_path, FIND_ENDPOINTS_QUERY, "teastore/find-endpoints", "find_endpoints")
 
 
 @tool
 def teastore_component_inventory(repo_path: str) -> str:
     """Component Summary Agent tool: component inventory.
+
+    Captures a complete inventory of packages, classes, and methods for each TeaStore service.
+    Provides comprehensive structural information including file locations and line numbers.
+    Essential for understanding the overall composition and size of each microservice.
 
     Returns JSON:
     {
@@ -693,12 +720,16 @@ def teastore_component_inventory(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, COMPONENT_INVENTORY_QUERY, "teastore/component-inventory")
+    return _run_query_tool(repo_path, COMPONENT_INVENTORY_QUERY, "teastore/component-inventory", "component_inventory")
 
 
 @tool
 def teastore_hierarchical_composition(repo_path: str) -> str:
     """Component Summary Agent tool: hierarchical composition.
+
+    Captures package/class/method containment relationships and inheritance hierarchies.
+    Maps the parent-child structure showing how components are organized and related.
+    Reveals design patterns through class inheritance and composition analysis.
 
     Returns JSON:
     {
@@ -709,12 +740,16 @@ def teastore_hierarchical_composition(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, HIERARCHICAL_COMPOSITION_QUERY, "teastore/hierarchical-composition")
+    return _run_query_tool(repo_path, HIERARCHICAL_COMPOSITION_QUERY, "teastore/hierarchical-composition", "hierarchical_composition")
 
 
 @tool
 def teastore_exported_http_endpoints(repo_path: str) -> str:
     """Component Summary Agent tool: exported HTTP endpoints.
+
+    Identifies endpoint classes exposed via HTTP based on naming conventions.
+    Focuses on REST endpoints and HTTP-accessible service interfaces.
+    Helps understand the public-facing API surface of each microservice.
 
     Returns JSON:
     {
@@ -725,12 +760,16 @@ def teastore_exported_http_endpoints(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, EXPORTED_HTTP_ENDPOINTS_QUERY, "teastore/exported-http-endpoints")
+    return _run_query_tool(repo_path, EXPORTED_HTTP_ENDPOINTS_QUERY, "teastore/exported-http-endpoints", "exported_http_endpoints")
 
 
 @tool
 def teastore_exported_public_api(repo_path: str) -> str:
     """Component Summary Agent tool: exported public API surface.
+
+    Captures all public methods exposed by services across the codebase.
+    Analyzes method visibility to determine the public contract of each service.
+    Critical for understanding inter-service communication and API design.
 
     Returns JSON:
     {
@@ -741,12 +780,16 @@ def teastore_exported_public_api(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, EXPORTED_PUBLIC_API_QUERY, "teastore/exported-public-api")
+    return _run_query_tool(repo_path, EXPORTED_PUBLIC_API_QUERY, "teastore/exported-public-api", "exported_public_api")
 
 
 @tool
 def teastore_deps_call_based(repo_path: str) -> str:
     """Component Summary Agent tool: call-based dependencies.
+
+    Analyzes method call edges to map how methods invoke each other across the codebase.
+    Reveals runtime dependencies and communication patterns between components.
+    Essential for understanding control flow and service interactions.
 
     Returns JSON:
     {
@@ -757,12 +800,16 @@ def teastore_deps_call_based(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, DEPS_CALL_BASED_QUERY, "teastore/deps-call-based")
+    return _run_query_tool(repo_path, DEPS_CALL_BASED_QUERY, "teastore/deps-call-based", "deps_call_based")
 
 
 @tool
 def teastore_deps_type_based(repo_path: str) -> str:
     """Component Summary Agent tool: type-based dependencies.
+
+    Captures type references to understand compile-time dependencies between classes.
+    Shows which types are used where, revealing coupling and structural dependencies.
+    Helps identify opportunities for decoupling and modularization.
 
     Returns JSON:
     {
@@ -773,12 +820,16 @@ def teastore_deps_type_based(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, DEPS_TYPE_BASED_QUERY, "teastore/deps-type-based")
+    return _run_query_tool(repo_path, DEPS_TYPE_BASED_QUERY, "teastore/deps-type-based", "deps_type_based")
 
 
 @tool
 def teastore_deps_resource_based(repo_path: str) -> str:
     """Component Summary Agent tool: resource-based dependencies.
+
+    Identifies resource references such as URLs, file paths, and API endpoints in string literals.
+    Discovers external service dependencies and configuration requirements.
+    Critical for understanding deployment dependencies and integration points.
 
     Returns JSON:
     {
@@ -789,12 +840,16 @@ def teastore_deps_resource_based(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, DEPS_RESOURCE_BASED_QUERY, "teastore/deps-resource-based")
+    return _run_query_tool(repo_path, DEPS_RESOURCE_BASED_QUERY, "teastore/deps-resource-based", "deps_resource_based")
 
 
 @tool
 def teastore_rooted_call_graph_depth5(repo_path: str) -> str:
     """Behavior Summary Agent tool: rooted call graph depth 5.
+
+    Captures interprocedural call graph edges within TeaStore packages for behavior analysis.
+    Maps the complete flow of method invocations to understand execution paths.
+    Supports depth-5 analysis for comprehensive understanding of call chains.
 
     Returns JSON:
     {
@@ -805,12 +860,16 @@ def teastore_rooted_call_graph_depth5(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, ROOTED_CALL_GRAPH_DEPTH5_QUERY, "teastore/rooted-call-graph-depth5")
+    return _run_query_tool(repo_path, ROOTED_CALL_GRAPH_DEPTH5_QUERY, "teastore/rooted-call-graph-depth5", "rooted_call_graph_depth5")
 
 
 @tool
 def teastore_control_flow_structure(repo_path: str) -> str:
     """Behavior Summary Agent tool: control flow structure.
+
+    Analyzes control-flow statements including if/for/while/switch constructs.
+    Reveals branching complexity and iteration patterns in the codebase.
+    Helps understand algorithmic complexity and potential optimization opportunities.
 
     Returns JSON:
     {
@@ -821,12 +880,16 @@ def teastore_control_flow_structure(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, CONTROL_FLOW_STRUCTURE_QUERY, "teastore/control-flow-structure")
+    return _run_query_tool(repo_path, CONTROL_FLOW_STRUCTURE_QUERY, "teastore/control-flow-structure", "control_flow_structure")
 
 
 @tool
 def teastore_interaction_sites(repo_path: str) -> str:
     """Behavior Summary Agent tool: interaction sites.
+
+    Identifies external calls and database access points throughout the codebase.
+    Discovers integration points with external systems, APIs, and databases.
+    Critical for understanding system boundaries and external dependencies.
 
     Returns JSON:
     {
@@ -837,12 +900,16 @@ def teastore_interaction_sites(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, INTERACTION_SITES_QUERY, "teastore/interaction-sites")
+    return _run_query_tool(repo_path, INTERACTION_SITES_QUERY, "teastore/interaction-sites", "interaction_sites")
 
 
 @tool
 def teastore_synchronization_constructs(repo_path: str) -> str:
     """Behavior Summary Agent tool: synchronization constructs.
+
+    Detects synchronized blocks and methods to analyze concurrency patterns.
+    Identifies thread-safety mechanisms and potential synchronization bottlenecks.
+    Essential for understanding concurrent execution and performance characteristics.
 
     Returns JSON:
     {
@@ -853,4 +920,4 @@ def teastore_synchronization_constructs(repo_path: str) -> str:
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, SYNCHRONIZATION_CONSTRUCTS_QUERY, "teastore/synchronization-constructs")
+    return _run_query_tool(repo_path, SYNCHRONIZATION_CONSTRUCTS_QUERY, "teastore/synchronization-constructs", "synchronization_constructs")
