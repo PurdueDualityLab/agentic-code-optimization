@@ -14,6 +14,7 @@ Examples:
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
 import time
@@ -28,8 +29,8 @@ load_dotenv()
 
 # Import all agents
 from agents import (AnalyzerAgent, BaseAgent, BehaviorSummarizerAgent,
-                    ComponentSummarizerAgent, EnvironmentSummarizerAgent,
-                    OptimizerAgent)
+                    ComponentSummarizerAgent,
+                    EnvironmentSummarizerAgent, OptimizerAgent)
 from utils import RunManager
 # Import all workflows
 from workflows import orchestrate_complete_pipeline, orchestrate_summarizers
@@ -181,7 +182,14 @@ async def evaluate_workflow(workflow_func: Callable, repo_path: str) -> None:
     try:
         logger.info(f"Starting workflow execution for repository: {repo_path_obj.absolute()}")
         start_time = time.time()
-        result = await workflow_func(str(repo_path_obj.absolute()))
+        if workflow_func.__name__ == "orchestrate_complete_pipeline":
+            benchmark_dir = run_dir / "benchmark"
+            result = await workflow_func(
+                str(repo_path_obj.absolute()),
+                benchmark_output_dir=str(benchmark_dir),
+            )
+        else:
+            result = await workflow_func(str(repo_path_obj.absolute()))
         execution_time = time.time() - start_time
         logger.info(f"Workflow execution completed successfully")
         logger.info(f"RESULT:\n{result}")
