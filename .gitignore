@@ -67,3 +67,9 @@ Thumbs.db
 # LLM Cache
 .ollama_cache/
 *.cache
+
+# CodeQL generated artifacts
+static_analisis_tools/output/
+**/codeql-db/
+**/*.bqrs
+**/*.sarif
