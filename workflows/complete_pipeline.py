@@ -260,11 +260,12 @@ async def correctness_check_node(state: PipelineState) -> dict:
         applied_changes = []
 
     # Format changes for analysis
-    changes_summary = "\n".join(
+    changes_summary = "\n\n".join(
         [
             f"File: {change.get('file', 'Unknown')}\n"
             f"Summary: {change.get('summary', 'No summary')}\n"
             f"Applied: {change.get('applied', False)}\n"
+            f"Diff:\n{change.get('diff', '').strip() or 'Missing diff'}\n"
             for change in applied_changes
         ]
     )
