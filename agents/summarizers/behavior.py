@@ -1,39 +1,25 @@
 """BehaviorSummarizer agent for code logic and execution pattern analysis.
 
-This agent analyzes code to understand:
-- Function behavior, logic flow, and execution patterns
-- Control flow structures, algorithms, and decision-making
-- Function interactions and call dependencies
-- Design patterns and code idioms
-- Error handling strategies
-- Data flow and variable dependencies
-- Performance-critical sections
-- Code complexity and architectural patterns
+This agent captures behavioral signals via static analysis:
+- Interprocedural call graphs
+- Control-flow structure
+- Interaction sites (service calls, database access)
+- Synchronization constructs
+- Structural execution patterns (depth, fan-out, loop nesting)
+- Static evidence linkage to source locations
 """
 
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.behavior import (analyze_code_complexity, analyze_code_structure,
-                            analyze_data_dependencies,
-                            analyze_error_handling_strategy,
-                            analyze_function_interactions, analyze_functions,
-                            detect_performance_bottlenecks,
-                            extract_code_documentation, identify_code_patterns)
+from tools.codeql import teastore_behavior_analysis
 
 
 class BehaviorSummarizerAgent(BaseAgent):
     """Agent for analyzing code behavior and execution patterns.
 
-    This agent systematically analyzes code to provide comprehensive understanding of:
-    - Function logic and execution flow
-    - Control structures and algorithms
-    - Function interactions and dependencies
-    - Design patterns and code idioms
-    - Error handling strategies
-    - Data flow and dependencies
-    - Performance characteristics
-    - Code complexity metrics
+    This agent systematically captures behavior-level structure using CodeQL
+    static analysis.
 
     Attributes:
        prompt: System prompt guiding the agent's analysis
@@ -43,110 +29,34 @@ class BehaviorSummarizerAgent(BaseAgent):
        max_iterations: Maximum agentic loop iterations (6)
     """
 
-    prompt = """You are an expert code behavior analyst with deep knowledge of:
-- Programming languages, syntax, and semantics
-- Control flow structures and algorithms
-- Design patterns and architectural patterns
-- Function interactions and call graphs
-- Data flow analysis and dependencies
-- Error handling strategies
-- Performance analysis and optimization
-- Code complexity metrics
+    prompt = """You are an expert behavior analyst. Use CodeQL static analysis results to
+capture execution-related structure exactly as specified below.
 
-Your task is to analyze code and provide a comprehensive summary of its behavior and patterns.
+## Captured Information (Behavior Summary Agent)
 
-## Analysis Approach
-
-1. **Function Analysis**: Start by understanding the functions and their signatures using analyze_functions.
-   - Identify all function definitions
-   - Extract parameters, return types, and decorators
-   - Identify async/await patterns
-
-2. **Code Structure**: Analyze overall code organization using analyze_code_structure.
-   - Control flow structures (loops, conditionals, recursion)
-   - Design patterns used (decorators, context managers, generators)
-   - Data flow and dependencies
-   - Import and dependency analysis
-
-3. **Function Interactions**: Examine how functions interact using analyze_function_interactions.
-   - Function call graph and relationships
-   - Identify entry points and critical functions
-   - Detect circular dependencies or problematic patterns
-
-4. **Complexity Assessment**: Evaluate code complexity using analyze_code_complexity.
-   - Cyclomatic complexity indicators
-   - Recursive patterns
-   - Nesting levels
-   - Critical vs simple code sections
-
-5. **Error Handling**: Analyze error handling patterns using analyze_error_handling_strategy.
-   - Exception types caught
-   - Error handling coverage
-   - Bare except clauses (anti-patterns)
-   - Raise statement patterns
-
-6. **Design Patterns**: Identify patterns using identify_code_patterns.
-   - Decorators and their usage
-   - Generator patterns
-   - Context managers
-   - Lambda functions and comprehensions
-
-7. **Data Flow**: Examine data dependencies using analyze_data_dependencies.
-   - Global state and variables
-   - Class definitions and their relationships
-   - External dependencies
-
-8. **Performance Issues**: Detect potential bottlenecks using detect_performance_bottlenecks.
-   - Nested loops
-   - String concatenation patterns
-   - Inefficient data structures
-   - Critical performance-sensitive sections
-
-9. **Documentation**: Extract and analyze documentation using extract_code_documentation.
-   - Module and function docstrings
-   - Code comments and intent
-   - API documentation
+1. **Interprocedural call graphs**: Construct static call graphs rooted at
+   component entry points, capturing interprocedural method invocations.
+2. **Control-flow structure**: Identify control-flow constructs such as
+   branches and loops without executing the program.
+3. **Interaction sites**: Detect statically identifiable interaction points,
+   including outgoing service calls and database access sites.
+4. **Synchronization constructs**: Identify synchronization points (for
+   example, synchronized blocks or methods) that may influence ordering.
+5. **Structural execution patterns**: Summarize expected execution structure
+   (call depth, fan-out, loop nesting) inferred from static analysis.
+6. **Static evidence linkage**: Link all behavior-level abstractions to
+   corresponding static analysis evidence for reproducibility.
 
 ## Tool Usage Strategy
 
-- Start with analyze_functions to get an overview of all functions
-- Use analyze_code_structure for high-level organization
-- Call analyze_function_interactions to understand relationships
-- Use analyze_code_complexity for metrics
-- Apply detect_performance_bottlenecks for performance concerns
-- Examine error handling with analyze_error_handling_strategy
-- Review design patterns with identify_code_patterns
-- Check data flow with analyze_data_dependencies
-- Extract documentation with extract_code_documentation
+- Use only CodeQL-derived signals via teastore_behavior_analysis.
 
-## Analysis Output Format
+## Output Requirements
 
-Provide a structured analysis including:
-
-1. **Code Overview**: Brief description of what the code does
-2. **Function Map**: Key functions and their purposes
-3. **Control Flow Patterns**: Loops, conditionals, recursion used
-4. **Algorithms Identified**: Major algorithmic patterns
-5. **Design Patterns**: Patterns found (decorators, generators, etc.)
-6. **Function Dependencies**: Call graph and interactions
-7. **Complexity Assessment**: Complexity metrics and critical sections
-8. **Error Handling**: Exception handling strategies
-9. **Data Flow**: How data flows through the code
-10. **Performance Characteristics**: Performance-sensitive sections and potential issues
-11. **Code Quality Observations**: Strengths and potential improvements
-12. **Critical Behaviors**: Special behaviors, side effects, or important patterns
-
-## Important Notes
-
-- Be thorough in identifying behavioral patterns
-- Focus on understanding the "why" behind the code structure
-- Identify both positive patterns and potential issues
-- Note performance-critical sections clearly
-- Analyze error handling coverage completeness
-- Pay attention to complex control flow
-- Identify architectural decisions and their implications
-- For recursive code, note the recursion depth and termination conditions
-- If code contains async patterns, note their usage and potential issues
+- Provide a concise, structured summary aligned to the six captured
+  information categories above.
+- Include evidence references (file paths and line ranges or precise
+  locations) for each behavior and relation when available.
 
 ## Output Guardrails
 
@@ -161,13 +71,5 @@ Provide a structured analysis including:
     return_state_field = "behavior_analysis"
 
     tools = [
-        analyze_functions,
-        analyze_code_structure,
-        analyze_function_interactions,
-        analyze_code_complexity,
-        analyze_error_handling_strategy,
-        identify_code_patterns,
-        analyze_data_dependencies,
-        detect_performance_bottlenecks,
-        extract_code_documentation,
+        teastore_behavior_analysis,  # Combined TeaStore behavior analysis
     ]

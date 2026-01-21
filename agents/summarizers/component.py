@@ -1,34 +1,25 @@
 """ComponentSummarizer agent for code structure and organization analysis.
 
-This agent analyzes code components, architecture, and organization patterns:
-- Class hierarchies and relationships
-- Module and package structure
-- Public APIs and interfaces
-- Component boundaries and separation of concerns
-- Service-oriented architecture patterns
-- Code organization and design patterns
+This agent captures component-level structure and relationships via static analysis:
+- Component inventory across abstraction levels
+- Hierarchical composition (service/package/class/method)
+- Exported interfaces (e.g., HTTP endpoints/public APIs)
+- Static dependency relations
+- Component responsibilities inferred from structure and interactions
+- Evidence mapping to source locations
 """
 
 from __future__ import annotations
 
 from agents.base import BaseAgent
-from tools.component import (analyze_classes, analyze_component_boundaries,
-                             analyze_inheritance_hierarchy,
-                             analyze_module_structure, analyze_public_apis,
-                             analyze_service_architecture)
-from tools.codeql import teastore_codeql_analyzer
+from tools.codeql import teastore_component_analysis
 
 
 class ComponentSummarizerAgent(BaseAgent):
    """Agent for analyzing code structure and component organization.
 
-   This agent systematically analyzes code to provide comprehensive understanding of:
-   - Class definitions and inheritance hierarchies
-   - Module and package organization
-   - Public APIs and component interfaces
-   - Component boundaries and cohesion
-   - Service-oriented patterns
-   - Architectural organization
+   This agent systematically captures component structure and relationships using
+   CodeQL static analysis.
 
    Attributes:
       prompt: System prompt guiding the agent's analysis
@@ -38,92 +29,35 @@ class ComponentSummarizerAgent(BaseAgent):
       max_iterations: Maximum agentic loop iterations (6)
    """
 
-   prompt = """You are an expert code architecture analyst with deep knowledge of:
-- Object-oriented design principles and patterns
-- Class hierarchies and inheritance structures
-- Module organization and package design
-- API design and component boundaries
-- Service-oriented architecture
-- Design patterns and architectural patterns
-- Code organization best practices
+   prompt = """You are an expert component analyst. Use CodeQL static analysis results to
+capture component structure and relationships exactly as specified below.
 
-Your task is to analyze code and provide a comprehensive summary of its structure and organization.
+## Captured Information (Component Summary Agent)
 
-## Analysis Approach
-
-1. **Module Structure**: First understand the organization using analyze_module_structure.
-   - Identify package hierarchy
-   - Understand how modules are organized
-   - Note any package-level exports (__all__)
-
-2. **Class Analysis**: Analyze all classes using analyze_classes.
-   - Identify class definitions and their relationships
-   - Note inheritance and composition patterns
-   - Understand public methods and properties
-
-3. **Inheritance Patterns**: Examine inheritance using analyze_inheritance_hierarchy.
-   - Identify inheritance chains
-   - Find abstract base classes and interfaces
-   - Assess inheritance depth and complexity
-   - Note mixin patterns
-
-4. **Public APIs**: Analyze exported interfaces using analyze_public_apis.
-   - Identify public functions and classes
-   - Understand function signatures
-   - Identify API entry points
-   - Note public vs private separation
-
-5. **Component Organization**: Understand boundaries using analyze_component_boundaries.
-   - Identify logical components
-   - Assess separation of concerns
-   - Evaluate component cohesion
-   - Understand inter-component dependencies
-
-6. **Service Architecture**: Look for architectural patterns using analyze_service_architecture.
-   - Identify service classes
-   - Find factory and dependency injection patterns
-   - Locate manager and controller classes
-   - Note singleton patterns
+1. **Component inventory**: Identify components across abstraction levels
+   (functions, classes, packages, services) from static structure.
+2. **Hierarchical composition**: Derive parent-child relationships among
+   components (service -> package -> class -> method).
+3. **Exported interfaces**: Identify externally visible entry points such as
+   HTTP endpoints or public APIs.
+4. **Static dependency relations**: Extract dependency relationships among
+   components (call-based, type-based, resource-based), aggregated at
+   different abstraction levels.
+5. **Component responsibilities**: Summarize each component's role by combining
+   structure, exported interfaces, and interaction patterns.
+6. **Evidence mapping**: Associate each component and relation with precise
+   source locations from static analysis.
 
 ## Tool Usage Strategy
 
-- **For TeaStore repositories**: Start with teastore_codeql_analyzer to identify microservices and endpoints
-  using static analysis. This provides a comprehensive architecture overview specific to TeaStore.
-- Start with analyze_module_structure to understand overall organization
-- Use analyze_classes to get a detailed view of all classes
-- Apply analyze_inheritance_hierarchy to understand inheritance patterns
-- Examine analyze_public_apis for interface design
-- Check analyze_component_boundaries for architectural structure
-- Review analyze_service_architecture for architectural patterns
+- Use only CodeQL-derived signals via teastore_component_analysis.
 
-## Analysis Output Format
+## Output Requirements
 
-Provide a structured analysis including:
-
-1. **Organization Overview**: How the code is organized (modules, packages)
-2. **Class Architecture**: Key classes and their relationships
-3. **Inheritance Structure**: Main inheritance hierarchies and patterns
-4. **Public Interface**: What's publicly exposed and how it's organized
-5. **Component Structure**: Logical components and their boundaries
-6. **API Design**: Public functions and classes, their signatures
-7. **Service Patterns**: Service classes, factories, managers, controllers
-8. **Architectural Decisions**: Key architectural choices and their implications
-9. **Code Organization Quality**: Strengths and potential improvements
-10. **Interface Separation**: How well public vs private is separated
-11. **Modularity Assessment**: How well modularized is the code
-12. **Structural Patterns**: Recurring structural patterns and conventions
-
-## Important Notes
-
-- Be thorough in identifying structural patterns
-- Focus on understanding the "why" behind the organization
-- Identify both positive patterns and potential issues
-- Assess modularity and cohesion
-- Note any unusual or complex hierarchies
-- Pay attention to API design consistency
-- Identify clear component boundaries
-- Analyze service-oriented patterns if present
-- For large codebases, focus on the primary structure
+- Provide a concise, structured summary aligned to the six captured
+  information categories above.
+- Include evidence references (file paths and line ranges or precise
+  locations) for each component and relation when available.
 
 ## Output Guardrails
 
@@ -138,11 +72,5 @@ Provide a structured analysis including:
    return_state_field = "component_analysis"
 
    tools = [
-      teastore_codeql_analyzer,  # TeaStore-specific microservices analysis
-      analyze_module_structure,
-      analyze_classes,
-      analyze_inheritance_hierarchy,
-      analyze_public_apis,
-      analyze_component_boundaries,
-      analyze_service_architecture,
+      teastore_component_analysis,  # Combined TeaStore component analysis
    ]
