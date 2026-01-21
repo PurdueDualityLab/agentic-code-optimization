@@ -16,7 +16,7 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# CODEQL QUERY FILE TEMPLATES
+# CODEQL QUERY FILE TEMPLATES (OPTIMIZED)
 # ============================================================================
 
 FIND_MICROSERVICES_QUERY = """/**
@@ -59,10 +59,7 @@ where
   serviceName = getMicroserviceFromPackage(c.getPackage()) and
   isSignificantComponent(c) and
   c.fromSource()
-select c, "kind=microservice|service=" + serviceName + "|component_fqn=" + c.getQualifiedName() +
-  "|file=" + c.getLocation().getFile().getRelativePath() +
-  "|start_line=" + c.getLocation().getStartLine() +
-  "|end_line=" + c.getLocation().getEndLine()
+select c, "kind=microservice|service=" + serviceName + "|component_fqn=" + c.getQualifiedName()
 """
 
 FIND_ENDPOINTS_QUERY = """/**
@@ -97,15 +94,12 @@ where
   c.getPackage().getName().matches("tools.descartes.teastore.%") and
   serviceName = getMicroserviceFromPackage(c.getPackage()) and
   c.fromSource()
-select c, "kind=endpoint|service=" + serviceName + "|endpoint_fqn=" + c.getQualifiedName() +
-  "|file=" + c.getLocation().getFile().getRelativePath() +
-  "|start_line=" + c.getLocation().getStartLine() +
-  "|end_line=" + c.getLocation().getEndLine()
+select c, "kind=endpoint|service=" + serviceName + "|endpoint_fqn=" + c.getQualifiedName()
 """
 
 COMPONENT_INVENTORY_QUERY = """/**
- * @name TeaStore Component Inventory
- * @description Lists packages, classes, and methods for each TeaStore service
+ * @name TeaStore Component Inventory (Filtered)
+ * @description Lists only significant packages, endpoint classes, and service classes
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/component-inventory
@@ -121,34 +115,54 @@ string getMicroserviceFromPackage(Package p) {
   )
 }
 
-from Package p, string serviceName
-where
-  serviceName = getMicroserviceFromPackage(p)
-select p, "kind=component_inventory|service=" + serviceName + "|component_kind=package|component_fqn=" +
-  p.getName()
+predicate isSignificantClass(Class c) {
+  c.getName().matches("%Servlet") or
+  c.getName().matches("%Endpoint") or
+  c.getName().matches("%Rest") or
+  c.getName().matches("%Service") or
+  c.getName().matches("%Controller") or
+  c.getName().matches("%Application") or
+  c.getName().matches("%Registry") or
+  c.getName().matches("%Repository") or
+  c.getName().matches("%Manager") or
+  c.getName().matches("%Handler") or
+  c.getName().matches("%Dao") or
+  c.getName().matches("%Entity")
+}
 
-from Class c, string serviceName
+from Element e, string kind, string fqn, string serviceName, string message
 where
-  serviceName = getMicroserviceFromPackage(c.getPackage()) and
-  c.fromSource()
-select c, "kind=component_inventory|service=" + serviceName + "|component_kind=class|component_fqn=" +
-  c.getQualifiedName() + "|file=" + c.getLocation().getFile().getRelativePath() +
-  "|start_line=" + c.getLocation().getStartLine() +
-  "|end_line=" + c.getLocation().getEndLine()
-
-from Method m, string serviceName
-where
-  serviceName = getMicroserviceFromPackage(m.getDeclaringType().getPackage()) and
-  m.fromSource()
-select m, "kind=component_inventory|service=" + serviceName + "|component_kind=method|component_fqn=" +
-  m.getQualifiedName() + "|file=" + m.getLocation().getFile().getRelativePath() +
-  "|start_line=" + m.getLocation().getStartLine() +
-  "|end_line=" + m.getLocation().getEndLine()
+  // Only top-level service packages (not every subpackage)
+  (
+    exists(Package p |
+      e = p and
+      serviceName = getMicroserviceFromPackage(p) and
+      // Only capture direct service packages, not nested ones
+      p.getName().regexpMatch("tools\\\\.descartes\\\\.teastore\\\\.[^.]+") and
+      kind = "package" and
+      fqn = p.getName() and
+      message = "kind=component|component_type=package|service=" + serviceName + "|fqn=" + fqn
+    )
+  )
+  or
+  // Only significant classes (endpoints, services, etc.)
+  (
+    exists(Class c |
+      e = c and
+      c.fromSource() and
+      isSignificantClass(c) and
+      serviceName = getMicroserviceFromPackage(c.getPackage()) and
+      kind = "class" and
+      fqn = c.getQualifiedName() and
+      message = "kind=component|component_type=class|service=" + serviceName + "|fqn=" + fqn
+    )
+  )
+select e, message
 """
 
 HIERARCHICAL_COMPOSITION_QUERY = """/**
- * @name TeaStore Hierarchical Composition
- * @description Captures package/class/method containment and inheritance
+ * @name TeaStore Hierarchical Composition (Service Level)
+ * @description Captures service-to-package and package-to-class relationships only
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/hierarchical-composition
@@ -164,38 +178,53 @@ string getMicroserviceFromPackage(Package p) {
   )
 }
 
-from Package p, Class c, string serviceName
-where
-  c.getPackage() = p and
-  serviceName = getMicroserviceFromPackage(p) and
-  c.fromSource()
-select c, "kind=hierarchical_composition|service=" + serviceName + "|parent_kind=package|parent_fqn=" + p.getName() +
-  "|child_kind=class|child_fqn=" + c.getQualifiedName() +
-  "|file=" + c.getLocation().getFile().getRelativePath() +
-  "|start_line=" + c.getLocation().getStartLine() +
-  "|end_line=" + c.getLocation().getEndLine()
+predicate isSignificantClass(Class c) {
+  c.getName().matches("%Servlet") or
+  c.getName().matches("%Endpoint") or
+  c.getName().matches("%Rest") or
+  c.getName().matches("%Service") or
+  c.getName().matches("%Controller") or
+  c.getName().matches("%Repository") or
+  c.getName().matches("%Manager") or
+  c.getName().matches("%Handler") or
+  c.getName().matches("%Dao") or
+  c.getName().matches("%Entity")
+}
 
-from Class c, Method m, string serviceName
+from Element child, string serviceName, string parentFqn, string childFqn, string relType
 where
-  m.getDeclaringType() = c and
-  serviceName = getMicroserviceFromPackage(c.getPackage()) and
-  m.fromSource()
-select m, "kind=hierarchical_composition|service=" + serviceName + "|parent_kind=class|parent_fqn=" + c.getQualifiedName() +
-  "|child_kind=method|child_fqn=" + m.getQualifiedName() +
-  "|file=" + m.getLocation().getFile().getRelativePath() +
-  "|start_line=" + m.getLocation().getStartLine() +
-  "|end_line=" + m.getLocation().getEndLine()
-
-from Class sub, Class sup, string serviceName
-where
-  sub.fromSource() and
-  sup = sub.getSuperclass() and
-  serviceName = getMicroserviceFromPackage(sub.getPackage())
-select sub, "kind=hierarchical_composition|service=" + serviceName + "|parent_kind=class|parent_fqn=" + sup.getQualifiedName() +
-  "|child_kind=class|child_fqn=" + sub.getQualifiedName() +
-  "|file=" + sub.getLocation().getFile().getRelativePath() +
-  "|start_line=" + sub.getLocation().getStartLine() +
-  "|end_line=" + sub.getLocation().getEndLine()
+  // Package contains significant classes only
+  (
+    exists(Package p, Class c |
+      c.getPackage() = p and
+      serviceName = getMicroserviceFromPackage(p) and
+      isSignificantClass(c) and
+      c.fromSource() and
+      child = c and
+      parentFqn = p.getName() and
+      childFqn = c.getQualifiedName() and
+      relType = "package_to_class"
+    )
+  )
+  or
+  // Class inheritance (only for significant classes)
+  (
+    exists(Class sub, Class sup |
+      sub.fromSource() and
+      isSignificantClass(sub) and
+      sup = sub.getASupertype() and
+      sup instanceof Class and
+      serviceName = getMicroserviceFromPackage(sub.getPackage()) and
+      child = sub and
+      parentFqn = sup.getQualifiedName() and
+      childFqn = sub.getQualifiedName() and
+      relType = "inheritance"
+    )
+  )
+select child, "kind=hierarchical_composition|service=" + serviceName + 
+  "|relation=" + relType +
+  "|parent=" + parentFqn +
+  "|child=" + childFqn
 """
 
 EXPORTED_HTTP_ENDPOINTS_QUERY = """/**
@@ -220,17 +249,16 @@ from Class c, string serviceName
 where
   serviceName = getMicroserviceFromPackage(c.getPackage()) and
   (c.getName().matches("%Endpoint") or c.getName().matches("%Rest") or
-   c.getPackage().getName().matches("%.rest")) and
+   c.getPackage().getName().matches("%.rest") or
+   c.getName().matches("%Servlet") or
+   c.getName().matches("%Controller")) and
   c.fromSource()
-select c, "kind=exported_http_endpoint|service=" + serviceName + "|endpoint_fqn=" + c.getQualifiedName() +
-  "|file=" + c.getLocation().getFile().getRelativePath() +
-  "|start_line=" + c.getLocation().getStartLine() +
-  "|end_line=" + c.getLocation().getEndLine()
+select c, "kind=exported_http_endpoint|service=" + serviceName + "|endpoint_fqn=" + c.getQualifiedName()
 """
 
 EXPORTED_PUBLIC_API_QUERY = """/**
- * @name TeaStore Exported Public API
- * @description Captures public methods exposed by services
+ * @name TeaStore Exported Public API (Entry Points Only)
+ * @description Captures only public entry point methods (endpoints, services)
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/exported-public-api
@@ -246,20 +274,31 @@ string getMicroserviceFromPackage(Package p) {
   )
 }
 
+predicate isEntryPointClass(Class c) {
+  c.getName().matches("%Servlet") or
+  c.getName().matches("%Endpoint") or
+  c.getName().matches("%Rest") or
+  c.getName().matches("%Controller") or
+  c.getName().matches("%Service") or
+  c.getPackage().getName().matches("%.rest") or
+  c.getPackage().getName().matches("%.servlet")
+}
+
 from Method m, string serviceName
 where
   m.isPublic() and
+  isEntryPointClass(m.getDeclaringType()) and
   serviceName = getMicroserviceFromPackage(m.getDeclaringType().getPackage()) and
   m.fromSource()
-select m, "kind=exported_public_api|service=" + serviceName + "|method_fqn=" + m.getQualifiedName() +
-  "|file=" + m.getLocation().getFile().getRelativePath() +
-  "|start_line=" + m.getLocation().getStartLine() +
-  "|end_line=" + m.getLocation().getEndLine()
+select m, "kind=exported_public_api|service=" + serviceName + 
+  "|class=" + m.getDeclaringType().getQualifiedName() +
+  "|method=" + m.getName() +
+  "|signature=" + m.getStringSignature()
 """
 
 DEPS_CALL_BASED_QUERY = """/**
- * @name TeaStore Call-Based Dependencies
- * @description Captures method call edges
+ * @name TeaStore Call-Based Dependencies (Aggregated)
+ * @description Captures class-to-class dependencies via method calls
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/deps-call-based
@@ -267,34 +306,28 @@ DEPS_CALL_BASED_QUERY = """/**
 
 import java
 
-from MethodCall call
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
+}
+
+from Class fromClass, Class toClass, string fromService, string toService
 where
-  call.getEnclosingCallable().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%") and
-  call.getTarget().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%")
-select call, "kind=deps_call_based|caller=" + call.getEnclosingCallable().getQualifiedName() +
-  "|callee=" + call.getTarget().getQualifiedName() +
-  "|file=" + call.getLocation().getFile().getRelativePath() +
-  "|start_line=" + call.getLocation().getStartLine() +
-  "|end_line=" + call.getLocation().getEndLine()
-"""
-
-DEPS_TYPE_BASED_QUERY = """/**
- * @name TeaStore Type-Based Dependencies
- * @description Captures type references in TeaStore packages
- * @kind problem
- * @problem.severity recommendation
- * @id teastore/deps-type-based
- */
-
-import java
-
-from TypeAccess ta
-where
-  ta.getEnclosingCallable().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%")
-select ta, "kind=deps_type_based|type=" + ta.getType().getQualifiedName() +
-  "|file=" + ta.getLocation().getFile().getRelativePath() +
-  "|start_line=" + ta.getLocation().getStartLine() +
-  "|end_line=" + ta.getLocation().getEndLine()
+  exists(MethodCall call |
+    call.getEnclosingCallable().getDeclaringType() = fromClass and
+    call.getMethod().getDeclaringType() = toClass and
+    fromClass.fromSource() and
+    fromService = getMicroserviceFromPackage(fromClass.getPackage()) and
+    toService = getMicroserviceFromPackage(toClass.getPackage()) and
+    fromClass != toClass  // Exclude self-calls
+  )
+select fromClass, "kind=call_dependency|from_service=" + fromService + 
+  "|from_class=" + fromClass.getQualifiedName() +
+  "|to_service=" + toService + 
+  "|to_class=" + toClass.getQualifiedName()
 """
 
 DEPS_RESOURCE_BASED_QUERY = """/**
@@ -307,18 +340,28 @@ DEPS_RESOURCE_BASED_QUERY = """/**
 
 import java
 
-from StringLiteral s
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
+}
+
+from StringLiteral s, Class c, string serviceName
 where
-  s.getValue().matches("%http%") or s.getValue().matches("%/api/%")
-select s, "kind=deps_resource_based|value=" + s.getValue() +
-  "|file=" + s.getLocation().getFile().getRelativePath() +
-  "|start_line=" + s.getLocation().getStartLine() +
-  "|end_line=" + s.getLocation().getEndLine()
+  (s.getValue().matches("%http%") or s.getValue().matches("%/api/%")) and
+  c = s.getEnclosingCallable().getDeclaringType() and
+  c.fromSource() and
+  serviceName = getMicroserviceFromPackage(c.getPackage())
+select s, "kind=deps_resource_based|service=" + serviceName + 
+  "|class=" + c.getQualifiedName() +
+  "|value=" + s.getValue()
 """
 
 ROOTED_CALL_GRAPH_DEPTH5_QUERY = """/**
- * @name TeaStore Rooted Call Graph Depth 5
- * @description Captures interprocedural call graph edges within TeaStore packages
+ * @name TeaStore Rooted Call Graph (Class Level)
+ * @description Captures interprocedural call graph edges at class level within TeaStore packages
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/rooted-call-graph-depth5
@@ -326,20 +369,34 @@ ROOTED_CALL_GRAPH_DEPTH5_QUERY = """/**
 
 import java
 
-from MethodCall call
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
+}
+
+from Class callerClass, Class calleeClass, string fromService, string toService
 where
-  call.getEnclosingCallable().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%") and
-  call.getTarget().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%")
-select call, "kind=call_graph_edge|caller=" + call.getEnclosingCallable().getQualifiedName() +
-  "|callee=" + call.getTarget().getQualifiedName() +
-  "|file=" + call.getLocation().getFile().getRelativePath() +
-  "|start_line=" + call.getLocation().getStartLine() +
-  "|end_line=" + call.getLocation().getEndLine()
+  exists(MethodCall call |
+    call.getEnclosingCallable().getDeclaringType() = callerClass and
+    call.getMethod().getDeclaringType() = calleeClass and
+    callerClass.getPackage().getName().matches("tools.descartes.teastore.%") and
+    calleeClass.getPackage().getName().matches("tools.descartes.teastore.%") and
+    fromService = getMicroserviceFromPackage(callerClass.getPackage()) and
+    toService = getMicroserviceFromPackage(calleeClass.getPackage()) and
+    callerClass != calleeClass
+  )
+select callerClass, "kind=call_graph_edge|from_service=" + fromService + 
+  "|caller=" + callerClass.getQualifiedName() +
+  "|to_service=" + toService +
+  "|callee=" + calleeClass.getQualifiedName()
 """
 
 CONTROL_FLOW_STRUCTURE_QUERY = """/**
- * @name TeaStore Control Flow Structure
- * @description Captures control-flow statements (if/for/while/switch)
+ * @name TeaStore Control Flow Structure (Aggregated)
+ * @description Captures control-flow statement counts per class
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/control-flow-structure
@@ -347,21 +404,46 @@ CONTROL_FLOW_STRUCTURE_QUERY = """/**
 
 import java
 
-from Stmt s
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
+}
+
+predicate isSignificantClass(Class c) {
+  c.getName().matches("%Servlet") or
+  c.getName().matches("%Endpoint") or
+  c.getName().matches("%Rest") or
+  c.getName().matches("%Service") or
+  c.getName().matches("%Controller") or
+  c.getName().matches("%Repository") or
+  c.getName().matches("%Manager") or
+  c.getName().matches("%Handler")
+}
+
+from Class c, string serviceName, int ifCount, int forCount, int whileCount, int switchCount
 where
-  s instanceof IfStmt or
-  s instanceof ForStmt or
-  s instanceof WhileStmt or
-  s instanceof SwitchStmt
-select s, "kind=control_flow_structure|statement=" + s.getClass().getName() +
-  "|file=" + s.getLocation().getFile().getRelativePath() +
-  "|start_line=" + s.getLocation().getStartLine() +
-  "|end_line=" + s.getLocation().getEndLine()
+  c.fromSource() and
+  isSignificantClass(c) and
+  serviceName = getMicroserviceFromPackage(c.getPackage()) and
+  ifCount = count(IfStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
+  forCount = count(ForStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
+  whileCount = count(WhileStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
+  switchCount = count(SwitchStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
+  (ifCount > 0 or forCount > 0 or whileCount > 0 or switchCount > 0)
+select c, "kind=control_flow_structure|service=" + serviceName + 
+  "|class=" + c.getQualifiedName() +
+  "|if_count=" + ifCount +
+  "|for_count=" + forCount +
+  "|while_count=" + whileCount +
+  "|switch_count=" + switchCount
 """
 
 INTERACTION_SITES_QUERY = """/**
- * @name TeaStore Interaction Sites
- * @description Captures external calls and database access sites
+ * @name TeaStore Interaction Sites (Aggregated)
+ * @description Captures external calls and database access sites aggregated by class
  * @kind problem
  * @problem.severity recommendation
  * @id teastore/interaction-sites
@@ -369,31 +451,46 @@ INTERACTION_SITES_QUERY = """/**
 
 import java
 
-predicate isDbPackage(string pkg) {
-  pkg.matches("java\\\\.sql(\\\\..*)?") or
-  pkg.matches("javax\\\\.sql(\\\\..*)?") or
-  pkg.matches("javax\\\\.persistence(\\\\..*)?") or
-  pkg.matches("org\\\\.hibernate(\\\\..*)?") or
-  pkg.matches("org\\\\.springframework\\\\.jdbc(\\\\..*)?")
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
 }
 
-from MethodCall call
-where
-  call.getEnclosingCallable().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%") and
-  not call.getTarget().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%")
-select call, "kind=interaction_site|target=" + call.getTarget().getQualifiedName() +
-  "|file=" + call.getLocation().getFile().getRelativePath() +
-  "|start_line=" + call.getLocation().getStartLine() +
-  "|end_line=" + call.getLocation().getEndLine()
+predicate isDbPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    (
+      pkgName.matches("java.sql%") or
+      pkgName.matches("javax.sql%") or
+      pkgName.matches("javax.persistence%") or
+      pkgName.matches("org.hibernate%") or
+      pkgName.matches("org.springframework.jdbc%") or
+      pkgName.matches("org.springframework.data%")
+    )
+  )
+}
 
-from MethodCall call
+from Class c, string serviceName, string targetPackage, string interactionType
 where
-  call.getEnclosingCallable().getDeclaringType().getPackage().getName().matches("tools.descartes.teastore.%") and
-  isDbPackage(call.getTarget().getDeclaringType().getPackage().getName())
-select call, "kind=db_access_site|target=" + call.getTarget().getQualifiedName() +
-  "|file=" + call.getLocation().getFile().getRelativePath() +
-  "|start_line=" + call.getLocation().getStartLine() +
-  "|end_line=" + call.getLocation().getEndLine()
+  c.fromSource() and
+  serviceName = getMicroserviceFromPackage(c.getPackage()) and
+  exists(MethodCall call, Package targetPkg |
+    call.getEnclosingCallable().getDeclaringType() = c and
+    targetPkg = call.getMethod().getDeclaringType().getPackage() and
+    targetPackage = targetPkg.getName() and
+    not targetPackage.matches("tools.descartes.teastore.%") and
+    (
+      (isDbPackage(targetPkg) and interactionType = "db_access") or
+      (not isDbPackage(targetPkg) and interactionType = "external_call")
+    )
+  )
+select c, "kind=interaction_site|service=" + serviceName + 
+  "|class=" + c.getQualifiedName() +
+  "|type=" + interactionType +
+  "|target_package=" + targetPackage
 """
 
 SYNCHRONIZATION_CONSTRUCTS_QUERY = """/**
@@ -406,14 +503,22 @@ SYNCHRONIZATION_CONSTRUCTS_QUERY = """/**
 
 import java
 
-from Method m
+string getMicroserviceFromPackage(Package p) {
+  exists(string pkgName |
+    pkgName = p.getName() and
+    pkgName.matches("tools.descartes.teastore.%") and
+    result = pkgName.regexpCapture("tools\\\\.descartes\\\\.teastore\\\\.([^.]+).*", 1)
+  )
+}
+
+from Method m, string serviceName
 where
   m.isSynchronized() and
-  m.fromSource()
-select m, "kind=synchronization_construct|type=method|method_fqn=" + m.getQualifiedName() +
-  "|file=" + m.getLocation().getFile().getRelativePath() +
-  "|start_line=" + m.getLocation().getStartLine() +
-  "|end_line=" + m.getLocation().getEndLine()
+  m.fromSource() and
+  serviceName = getMicroserviceFromPackage(m.getDeclaringType().getPackage())
+select m, "kind=synchronization_construct|service=" + serviceName + 
+  "|type=method|class=" + m.getDeclaringType().getQualifiedName() +
+  "|method=" + m.getName()
 """
 
 QLPACK_YML = """name: teastore/microservice-analysis
@@ -582,7 +687,11 @@ def _parse_sarif_for_rule(sarif_path: Path, rule_id: str) -> list[dict[str, str]
 
 
 def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[dict[str, str]]]:
-    """Parse SARIF results for multiple rules and return grouped by rule ID."""
+    """Parse SARIF results for multiple rules and return grouped by rule ID with deduplication.
+    
+    OPTIMIZATION: Deduplicates results to reduce output size while preserving all unique
+    architectural information.
+    """
     logger.info(f"Parsing SARIF results from {sarif_path} for {len(rule_ids)} rules")
 
     with open(sarif_path) as f:
@@ -590,6 +699,9 @@ def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[
 
     # Initialize results dict for all rule IDs
     results_by_rule: dict[str, list[dict[str, str]]] = {rule_id: [] for rule_id in rule_ids}
+    
+    # Track seen items to deduplicate (exclude file/line metadata for dedup key)
+    seen_by_rule: dict[str, set[str]] = {rule_id: set() for rule_id in rule_ids}
 
     for run in sarif_data.get("runs", []):
         for result in run.get("results", []):
@@ -599,7 +711,17 @@ def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[
             message_text = result.get("message", {}).get("text", "")
             parsed = _parse_kv_message(message_text)
             if parsed:
-                results_by_rule[rule_id].append(parsed)
+                # Create dedup key (exclude file/line info if present)
+                dedup_key = "|".join(f"{k}={v}" for k, v in sorted(parsed.items()) 
+                                    if k not in ['file', 'start_line', 'end_line'])
+                
+                if dedup_key not in seen_by_rule[rule_id]:
+                    seen_by_rule[rule_id].add(dedup_key)
+                    results_by_rule[rule_id].append(parsed)
+
+    # Log deduplication stats
+    total_unique = sum(len(results) for results in results_by_rule.values())
+    logger.info(f"Parsed {total_unique} unique results after deduplication")
 
     return results_by_rule
 
@@ -665,6 +787,8 @@ def _run_multi_query_tool(
         total_findings = sum(len(results) for results in results_by_rule.values())
 
         logger.info(f"TeaStore CodeQL analysis completed successfully for {tool_name}")
+        logger.info(f"Total unique findings: {total_findings}")
+        
         return json.dumps(
             {
                 "success": True,
@@ -693,24 +817,23 @@ def _run_multi_query_tool(
 
 
 # ============================================================================
-# CODEQL COMBINED ANALYSIS TOOLS
+# CODEQL COMBINED ANALYSIS TOOLS (OPTIMIZED)
 # ============================================================================
 
 
 @tool
 def teastore_component_analysis(repo_path: str) -> str:
-    """Comprehensive component analysis for TeaStore architecture.
+    """Comprehensive component analysis for TeaStore architecture (OPTIMIZED).
 
     Runs all component-related CodeQL queries in a single analysis pass:
     - Microservice identification (package structure analysis)
     - Endpoint discovery (servlets, REST endpoints, controllers)
-    - Component inventory (packages, classes, methods)
-    - Hierarchical composition (containment and inheritance)
+    - Component inventory (FILTERED: only significant classes, no methods)
+    - Hierarchical composition (FILTERED: only significant relationships)
     - Exported HTTP endpoints (public API surface)
-    - Exported public API (all public methods)
-    - Call-based dependencies (method invocations)
-    - Type-based dependencies (compile-time references)
-    - Resource-based dependencies (URLs, file paths)
+    - Exported public API (FILTERED: only entry point methods)
+    - Call-based dependencies (AGGREGATED: class-level instead of method-level)
+    - Resource-based dependencies (URLs, file paths with context)
 
     This tool is optimized for ComponentSummarizerAgent to gather complete structural information
     about the TeaStore microservices architecture in a single Docker run.
@@ -726,7 +849,6 @@ def teastore_component_analysis(repo_path: str) -> str:
         "teastore/exported-http-endpoints": [{kv pairs...}, ...],
         "teastore/exported-public-api": [{kv pairs...}, ...],
         "teastore/deps-call-based": [{kv pairs...}, ...],
-        "teastore/deps-type-based": [{kv pairs...}, ...],
         "teastore/deps-resource-based": [{kv pairs...}, ...]
       },
       "total_findings": int,
@@ -741,7 +863,6 @@ def teastore_component_analysis(repo_path: str) -> str:
         "exported-http-endpoints.ql": EXPORTED_HTTP_ENDPOINTS_QUERY,
         "exported-public-api.ql": EXPORTED_PUBLIC_API_QUERY,
         "deps-call-based.ql": DEPS_CALL_BASED_QUERY,
-        "deps-type-based.ql": DEPS_TYPE_BASED_QUERY,
         "deps-resource-based.ql": DEPS_RESOURCE_BASED_QUERY,
     }
 
@@ -753,22 +874,20 @@ def teastore_component_analysis(repo_path: str) -> str:
         "teastore/exported-http-endpoints",
         "teastore/exported-public-api",
         "teastore/deps-call-based",
-        "teastore/deps-type-based",
         "teastore/deps-resource-based",
     ]
 
     return _run_multi_query_tool(repo_path, queries, rule_ids, "component_analysis")
 
 
-
 @tool
 def teastore_behavior_analysis(repo_path: str) -> str:
-    """Comprehensive behavior analysis for TeaStore execution patterns.
+    """Comprehensive behavior analysis for TeaStore execution patterns (OPTIMIZED).
 
     Runs all behavior-related CodeQL queries in a single analysis pass:
-    - Rooted call graph (interprocedural call chains depth-5)
-    - Control flow structure (if/for/while/switch constructs)
-    - Interaction sites (external calls and database access)
+    - Rooted call graph (AGGREGATED: class-level interprocedural calls)
+    - Control flow structure (AGGREGATED: statement counts per class)
+    - Interaction sites (AGGREGATED: external calls and database access by class)
     - Synchronization constructs (thread-safety mechanisms)
 
     This tool is optimized for BehaviorSummarizerAgent to gather complete runtime behavior
