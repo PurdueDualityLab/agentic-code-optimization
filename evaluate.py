@@ -14,6 +14,7 @@ Examples:
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
 import time
@@ -28,8 +29,8 @@ load_dotenv()
 
 # Import all agents
 from agents import (AnalyzerAgent, BaseAgent, BehaviorSummarizerAgent,
-                    ComponentSummarizerAgent, EnvironmentSummarizerAgent,
-                    OptimizerAgent)
+                    BenchmarkAgent, ComponentSummarizerAgent,
+                    EnvironmentSummarizerAgent, OptimizerAgent)
 from utils import RunManager
 # Import all workflows
 from workflows import orchestrate_complete_pipeline, orchestrate_summarizers
@@ -41,6 +42,7 @@ AGENTS: dict[str, Type[BaseAgent]] = {
     "BehaviorSummarizerAgent": BehaviorSummarizerAgent,
     "ComponentSummarizerAgent": ComponentSummarizerAgent,
     "EnvironmentSummarizerAgent": EnvironmentSummarizerAgent,
+    "BenchmarkAgent": BenchmarkAgent,
 }
 
 WORKFLOWS: dict[str, Callable] = {
@@ -102,7 +104,17 @@ async def evaluate_agent(agent_class: Type[BaseAgent], repo_path: str) -> None:
     try:
         logger.info(f"Starting agent execution for repository: {repo_path_obj.absolute()}")
         start_time = time.time()
-        result = await agent.run(str(repo_path_obj.absolute()))
+        if agent_class is BenchmarkAgent:
+            benchmark_dir = run_dir / "benchmark"
+            payload = {
+                "command_env": "BENCHMARK_CMD",
+                "workdir": str(repo_path_obj.absolute()),
+                "output_dir": str(benchmark_dir),
+                "render_charts": True,
+            }
+            result = await agent.run(json.dumps(payload))
+        else:
+            result = await agent.run(str(repo_path_obj.absolute()))
         execution_time = time.time() - start_time
         logger.info(f"Agent execution completed successfully, result length: {len(result) if result else 0}")
         logger.info(f"RESULT:\n{result}")

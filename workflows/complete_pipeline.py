@@ -1,11 +1,12 @@
 """LangGraph-based orchestrator for the complete optimization pipeline.
 
-This module implements a four-phase iterative pipeline:
+This module implements a five-phase iterative pipeline:
 1. PHASE 1 - SUMMARIZATION: Run environment, component, and behavior summarizers in parallel
 2. PHASE 2 - ANALYSIS: Analyze summaries to produce optimization guidance with static signals
 3. PHASE 3 - OPTIMIZATION: Apply safe code improvements based on analysis
 4. PHASE 4 - CORRECTNESS CHECK: Validate applied changes for correctness and quality
-5. LOOP: Conditionally loop back to summarization or exit based on iteration count
+5. PHASE 5 - BENCHMARK: Run external benchmark command if configured
+6. LOOP: Conditionally loop back to summarization or exit based on iteration count
 
 The pipeline uses temporary files for inter-agent communication and manages state flow
 through a LangGraph workflow with iterative refinement.
@@ -22,8 +23,9 @@ from beautilog import logger
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
-                    OptimizerAgent, orchestrate_code_correctness)
+from agents import (AnalysisReport, AnalyzerAgent, BenchmarkAgent,
+                    BenchmarkReport, OptimizationReport, OptimizerAgent,
+                    orchestrate_code_correctness)
 
 from .summary_orchestrator import orchestrate_summarizers
 
@@ -107,8 +109,14 @@ _PIPELINE_PHASES = [
     PipelinePhase(
         "correctness_check",
         None,
-        return_fields=["analysis_result", "correctness_verdict"],
+        return_fields=["analysis_result", "correctness_verdict", "correctness_report"],
         return_class=tuple,  # Composite: (AnalysisResult, CorrectnessVerdict)
+    ),
+    PipelinePhase(
+        "benchmark",
+        None,
+        agent_class=BenchmarkAgent,
+        return_class=BenchmarkReport,
     ),
 ]
 
@@ -237,6 +245,33 @@ async def optimize_node(state: PipelineState) -> dict:
     return {"optimization_report": result}
 
 
+async def benchmark_node(state: PipelineState) -> dict:
+    """PHASE 5: Run benchmark command to measure performance impact.
+
+    Uses BenchmarkAgent to execute an external benchmark command configured
+    via environment variable (BENCHMARK_CMD by default). The benchmark
+    runs in the repository root unless overridden.
+
+    Args:
+        state: Pipeline state containing code_path
+
+    Returns:
+        Dictionary with benchmark_report (JSON string)
+    """
+    logger.info("PHASE 5: Running BenchmarkAgent")
+    agent = BenchmarkAgent()
+
+    payload = {
+        "command_env": "BENCHMARK_CMD",
+        "workdir": state["code_path"],
+    }
+
+    result = await agent.run(json.dumps(payload))
+    logger.info("PHASE 5: Benchmark complete")
+
+    return {"benchmark_report": result}
+
+
 async def correctness_check_node(state: PipelineState) -> dict:
     """PHASE 4: Run code correctness workflow.
 
@@ -289,6 +324,12 @@ async def correctness_check_node(state: PipelineState) -> dict:
     return {
         "analysis_result": correctness_state.get("analysis_result", ""),
         "correctness_verdict": correctness_state.get("correctness_verdict", ""),
+        "correctness_report": json.dumps(
+            {
+                "analysis_result": correctness_state.get("analysis_result", ""),
+                "correctness_verdict": correctness_state.get("correctness_verdict", ""),
+            }
+        ),
     }
 
 
@@ -316,14 +357,15 @@ def should_continue_loop(state: PipelineState) -> Literal["summarization", str]:
 
 
 def build_complete_pipeline() -> CompiledStateGraph:
-    """Build the complete four-phase optimization pipeline with iteration loop.
+    """Build the complete five-phase optimization pipeline with iteration loop.
 
     Constructs a LangGraph StateGraph from phase definitions that orchestrates:
     1. Summarization (parallel environment, component, behavior summaries)
     2. Analysis (structured guidance based on summaries with static signals)
     3. Optimization (apply safe code improvements)
     4. Correctness Check (orchestrates pain analysis and structured verdict)
-    5. Loop decision (conditionally loop back to summarization or end)
+    5. Benchmark (run external benchmark command)
+    6. Loop decision (conditionally loop back to summarization or end)
 
     The workflow follows a sequential DAG with conditional loop:
     START → summarization → analysis → optimization → correctness_check → (loop decision) → {summarization | END}
@@ -332,7 +374,8 @@ def build_complete_pipeline() -> CompiledStateGraph:
     - summarization → summary_text
     - analysis → analysis_report
     - optimization → optimization_report
-    - correctness_check → pain_analysis_result, correctness_verdict
+    - correctness_check → analysis_result, correctness_verdict, correctness_report
+    - benchmark → benchmark_report
 
     Returns:
         Compiled LangGraph StateGraph ready for invocation
@@ -346,6 +389,7 @@ def build_complete_pipeline() -> CompiledStateGraph:
         "analysis": analyze_node,
         "optimization": optimize_node,
         "correctness_check": correctness_check_node,
+        "benchmark": benchmark_node,
     }
 
     # Add nodes from phase definitions
@@ -413,7 +457,8 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
     2. Analysis: Produces structured optimization guidance with static analysis
     3. Optimization: Applies safe code improvements
     4. Correctness Check: Validates applied changes for correctness and quality
-    5. Loop: Conditionally iterates up to MAX_ITERATIONS times
+    5. Benchmark: Runs external benchmark command if configured
+    6. Loop: Conditionally iterates up to MAX_ITERATIONS times
 
     State fields are dynamically generated from phase definitions:
     - Phase outputs are automatically added to state based on agent.return_state_field
@@ -431,6 +476,8 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
         - optimization_report: Final OptimizationReport JSON from final iteration
         - analysis_result: Detailed correctness analysis from final iteration
         - correctness_verdict: Yes/No verdict from final iteration
+        - correctness_report: Combined correctness report JSON from final iteration
+        - benchmark_report: BenchmarkReport JSON from final iteration
         - iteration_count: Number of iterations completed
     """
     logger.info(f"Starting complete optimization pipeline for {code_path}")

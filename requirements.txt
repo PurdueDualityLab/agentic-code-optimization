@@ -34,3 +34,6 @@ beautilog>=0.2.4
 # Utilities
 python-json-logger>=2.0.0
 colorama>=0.4.6
+
+# Benchmark Visualization
+matplotlib>=3.8.0
