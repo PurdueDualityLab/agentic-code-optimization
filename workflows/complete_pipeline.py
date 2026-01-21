@@ -407,7 +407,7 @@ def build_complete_pipeline() -> CompiledStateGraph:
     7. Loop decision (conditionally loop back to benchmark-before or end)
 
     The workflow follows a sequential DAG with conditional loop:
-    START → benchmark_before → summarization → analysis → optimization → correctness_check → benchmark_after → (loop decision) → {benchmark_before | END}
+    START → benchmark_before → summarization → analysis → optimization → correctness_check → benchmark_after → (loop decision) → {summarization | END}
 
     State fields are dynamically generated from phase definitions:
     - benchmark_before → benchmark_before
