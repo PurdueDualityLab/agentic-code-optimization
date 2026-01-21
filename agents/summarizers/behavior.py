@@ -20,6 +20,10 @@ from tools.behavior import (analyze_code_complexity, analyze_code_structure,
                             analyze_function_interactions, analyze_functions,
                             detect_performance_bottlenecks,
                             extract_code_documentation, identify_code_patterns)
+from tools.codeql import (teastore_control_flow_structure,
+                          teastore_interaction_sites,
+                          teastore_rooted_call_graph_depth5,
+                          teastore_synchronization_constructs)
 
 
 class BehaviorSummarizerAgent(BaseAgent):
@@ -109,6 +113,10 @@ Your task is to analyze code and provide a comprehensive summary of its behavior
 
 ## Tool Usage Strategy
 
+- **For TeaStore repositories**: Use CodeQL behavior tools to capture call graph
+  and interaction patterns:
+  teastore_rooted_call_graph_depth5, teastore_control_flow_structure,
+  teastore_interaction_sites, teastore_synchronization_constructs.
 - Start with analyze_functions to get an overview of all functions
 - Use analyze_code_structure for high-level organization
 - Call analyze_function_interactions to understand relationships
@@ -161,6 +169,10 @@ Provide a structured analysis including:
     return_state_field = "behavior_analysis"
 
     tools = [
+        teastore_rooted_call_graph_depth5,
+        teastore_control_flow_structure,
+        teastore_interaction_sites,
+        teastore_synchronization_constructs,
         analyze_functions,
         analyze_code_structure,
         analyze_function_interactions,
