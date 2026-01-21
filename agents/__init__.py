@@ -1,5 +1,6 @@
 from .analyzer import AnalysisReport, AnalyzerAgent
 from .base import BaseAgent
+from .codeql import CodeQLAgent, CodeQLRunResult
 from .correctness import (AnalysisResult, CorrectnessVerdict,
                           orchestrate_code_correctness)
 from .optimizer import OptimizationReport, OptimizerAgent

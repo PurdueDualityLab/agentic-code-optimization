@@ -1,0 +1,83 @@
+---
+queries:
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: BlockingCall.ql
+  relativeBqrsPath: custom-performance-queries/BlockingCall.bqrs
+  metadata:
+    name: Blocking thread sleep
+    description: Explicitly sleeping a thread blocks execution and reduces throughput
+      in microservices.
+    kind: problem
+    problem.severity: warning
+    id: cpp/performance/blocking-sleep
+    tags: performance
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: DbCallInLoop.ql
+  relativeBqrsPath: custom-performance-queries/DbCallInLoop.bqrs
+  metadata:
+    name: Database call in loop
+    description: Performing database operations commonly inside a loop can lead to
+      N+1 performance issues.
+    kind: problem
+    problem.severity: warning
+    id: cpp/performance/db-call-in-loop
+    tags: performance
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: PassByValue.ql
+  relativeBqrsPath: custom-performance-queries/PassByValue.bqrs
+  metadata:
+    name: Expensive type passed by value
+    description: Passing large types (like containers) by value can cause unnecessary
+      copying. Use const reference instead.
+    kind: problem
+    problem.severity: recommendation
+    id: cpp/performance/pass-by-value
+    tags: performance
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: RedundantMapLookup.ql
+  relativeBqrsPath: custom-performance-queries/RedundantMapLookup.bqrs
+  metadata:
+    name: Redundant map lookup
+    description: Checking if a key exists and then retrieving it performs two lookups.
+      Use find() instead.
+    kind: problem
+    problem.severity: warning
+    id: cpp/performance/redundant-map-lookup
+    tags: performance
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: SharedPtrByValue.ql
+  relativeBqrsPath: custom-performance-queries/SharedPtrByValue.bqrs
+  metadata:
+    name: Shared pointer passed by value
+    description: Passing std::shared_ptr by value invokes atomic operations. Use const
+      reference unless ownership sharing is intended.
+    kind: problem
+    problem.severity: recommendation
+    id: cpp/performance/shared-ptr-by-value
+    tags: performance
+ -
+  pack: custom-performance-queries#0
+  relativeQueryPath: StrCatInLoop.ql
+  relativeBqrsPath: custom-performance-queries/StrCatInLoop.bqrs
+  metadata:
+    name: String concatenation in loop
+    description: Concatenating strings in a loop can be inefficient (O(n^2)).
+    kind: problem
+    problem.severity: warning
+    id: cpp/performance/string-concatenation-in-loop
+    tags: performance
+extensionPacks: []
+packs:
+  custom-performance-queries#0:
+    name: custom-performance-queries
+    version: 1.0.0
+    isLibrary: false
+    isExtensionPack: false
+    localPath: file:///Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/static_analisis_tools/custom_queries/performance/
+    localPackDefinitionFile: file:///Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/static_analisis_tools/custom_queries/performance/qlpack.yml
+    runDataExtensions: []

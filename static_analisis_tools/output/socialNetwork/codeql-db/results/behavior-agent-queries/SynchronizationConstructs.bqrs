@@ -1,0 +1,94 @@
+Œ\cv_locky/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/ClientPool.h*Mutex: cv_lock (type: unique_lock<mutex>)0Unique lock: cv_lock (type: unique_lock<mutex>)__lky/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/future'Mutex: __lk (type: unique_lock<mutex>)-Unique lock: __lk (type: unique_lock<mutex>)&Mutex: __lk (type: lock_guard<mutex>)+Lock guard: __lk (type: lock_guard<mutex>)__lx…/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/condition_variable&Mutex: __lx (type: lock_guard<mutex>)+Lock guard: __lx (type: lock_guard<mutex>)__guardˆ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/shared_ptr.hdMutex: __guard (type: __allocation_guard<allocator<__shared_ptr_emplace<mutex, allocator<mutex>>>>)__attr/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support/pthread.h*Mutex: __attr (type: pthread_mutexattr_t)mx_V/opt/homebrew/Cellar/boost/1.88.0/include/boost/system/detail/error_category_impl.hppMutex: mx_ (type: mutex)lk$Mutex: lk (type: lock_guard<mutex>))Lock guard: lk (type: lock_guard<mutex>)frontend_lockR/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/sinks/basic_sink_frontend.hpp?Mutex: frontend_lock (type: shared_lock_guard<light_rw_mutex>)DLock guard: frontend_lock (type: shared_lock_guard<light_rw_mutex>)mMutex: m (type: fake_mutex)lock6Mutex: lock (type: shared_lock_guard<light_rw_mutex>);Lock guard: lock (type: shared_lock_guard<light_rw_mutex>)=Lock guard: lock (type: exclusive_lock_guard<BackendMutexT>)9Mutex: lock (type: exclusive_lock_guard<light_rw_mutex>)>Lock guard: lock (type: exclusive_lock_guard<light_rw_mutex>)thread_lock/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UniqueIdService/UniqueIdService.cpp!Mutex: thread_lock (type: mutex):Mutex: lock (type: exclusive_lock_guard<recursive_mutex>)?Lock guard: lock (type: exclusive_lock_guard<recursive_mutex>)	unlockerAMutex: unlocker (type: exclusive_auto_unlocker<recursive_mutex>)5Mutex: lock (type: exclusive_lock_guard<fake_mutex>):Lock guard: lock (type: exclusive_lock_guard<fake_mutex>)”/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UrlShortenService/UrlShortenService.cppˆ/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UserService/UserService.cpp__r%Mutex: __r (type: shared_ptr<mutex>)(unnamed parameter 1)}/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/pthread/pthread.h7Mutex: (unnamed parameter 1) (type: pthread_mutex_t *)(unnamed parameter 0);Mutex: (unnamed parameter 0) (type: pthread_mutexattr_t *)AMutex: (unnamed parameter 0) (type: const pthread_mutexattr_t *)MMutex: (unnamed parameter 0) (type: const pthread_mutexattr_t *__restrict__)7Mutex: (unnamed parameter 0) (type: pthread_mutex_t *)CMutex: (unnamed parameter 0) (type: pthread_mutex_t *__restrict__)WMutex: (unnamed parameter 1) (type: const pthread_mutexattr_t *__restrict__ _Nullable)JMutex: (unnamed parameter 1) (type: const pthread_mutexattr_t *_Nullable)=Mutex: (unnamed parameter 0) (type: const pthread_mutex_t *)IMutex: (unnamed parameter 0) (type: const pthread_mutex_t *__restrict__)CMutex: (unnamed parameter 1) (type: pthread_mutex_t *__restrict__)__m_‚/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__mutex/mutex.h%Mutex: __m_ (type: __libcpp_mutex_t)3Mutex: (unnamed parameter 0) (type: const mutex &)_mtxMutex: _mtx (type: mutex)_cv3Condition variable: _cv (type: condition_variable)œ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__condition_variable/condition_variable.h)Mutex: __lk (type: unique_lock<mutex> &)/Unique lock: __lk (type: unique_lock<mutex> &)__cv_5Condition variable: __cv_ (type: condition_variable)__mut_Mutex: __mut_ (type: mutex)MCondition variable: (unnamed parameter 0) (type: const condition_variable &)__xˆ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__mutex/unique_lock.h/Unique lock: __x (type: unique_lock<_Mutex> &)__y/Unique lock: __y (type: unique_lock<_Mutex> &)__u/Unique lock: __u (type: unique_lock<_Mutex> &)!Mutex: __m_ (type: mutex_type *)0Unique lock: __u (type: unique_lock<_Mutex> &&)GUnique lock: (unnamed parameter 0) (type: const unique_lock<_Mutex> &)__m Mutex: __m (type: mutex_type &)‡/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__mutex/lock_guard.hELock guard: (unnamed parameter 0) (type: const lock_guard<_Mutex> &)!Mutex: __m_ (type: mutex_type &)„/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/thread.hGCondition variable: (unnamed parameter 0) (type: condition_variable *)-Mutex: (unnamed parameter 1) (type: mutex *)GCondition variable: (unnamed parameter 0) (type: condition_variable &)8Mutex: (unnamed parameter 1) (type: unique_lock<mutex>)>Unique lock: (unnamed parameter 1) (type: unique_lock<mutex>)HLock guard: (unnamed parameter 0) (type: const __unlock_guard<_Lock> &)QCondition variable: (unnamed parameter 0) (type: const condition_variable_any &)(Mutex: __mut_ (type: shared_ptr<mutex>)m_BackendMutexL/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/sinks/sync_frontend.hpp1Mutex: m_BackendMutex (type: backend_mutex_type)m_Mutex"Mutex: m_Mutex (type: mutex_type)Q/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/sources/threading_models.hpp&Mutex: m_Mutex (type: light_rw_mutex)E/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/detail/locks.hpp)Mutex: m_Mutex (type: recursive_mutex &)#Mutex: m (type: recursive_mutex &)<Mutex: m_Mutex (type: multi_thread_model<light_rw_mutex> &)6Mutex: m (type: multi_thread_model<light_rw_mutex> &)__a,Mutex: __a (type: const allocator<mutex> &)‡/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/addressof.hMutex: __x (type: mutex &)	__alloc_/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/allocation_guard.hQMutex: __alloc_ (type: allocator<__shared_ptr_emplace<mutex, allocator<mutex>>>)$Mutex: __a (type: allocator<mutex>)DMutex: (unnamed parameter 0) (type: _opaque_pthread_mutexattr_t &&)IMutex: (unnamed parameter 0) (type: const _opaque_pthread_mutexattr_t &)@Mutex: (unnamed parameter 0) (type: _opaque_pthread_mutex_t &&)EMutex: (unnamed parameter 0) (type: const _opaque_pthread_mutex_t &)&Mutex: __m (type: __libcpp_mutex_t *)0Mutex: __m (type: __libcpp_recursive_mutex_t *)x/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/mutexCMutex: (unnamed parameter 0) (type: const recursive_timed_mutex &)9Mutex: (unnamed parameter 0) (type: const timed_mutex &)/Mutex: __m_ (type: __libcpp_recursive_mutex_t)=Mutex: (unnamed parameter 0) (type: const recursive_mutex &)Mutex: __m_ (type: mutex)N/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/detail/light_rw_mutex.hpp<Mutex: (unnamed parameter 0) (type: const light_rw_mutex &)LLock guard: (unnamed parameter 0) (type: const shared_lock_guard<MutexT> &)OLock guard: (unnamed parameter 0) (type: const exclusive_lock_guard<MutexT> &)KMutex: (unnamed parameter 0) (type: is_mutex_type<single_thread_model> &&)PMutex: (unnamed parameter 0) (type: const is_mutex_type<single_thread_model> &)H/opt/homebrew/Cellar/boost/1.88.0/include/boost/system/detail/mutex.hppBLock guard: (unnamed parameter 0) (type: const lock_guard<Mtx> &)J/opt/homebrew/Cellar/boost/1.88.0/include/boost/log/detail/fake_mutex.hpp8Mutex: (unnamed parameter 0) (type: const fake_mutex &)_thread_lock/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UniqueIdService/UniqueIdHandler.h$Mutex: _thread_lock (type: mutex *)#Mutex: thread_lock (type: mutex *)(Mutex: m_Mutex (type: light_rw_mutex &)mtx_Mutex: mtx_ (type: mutex &)__args Mutex: __args (type: mutex *&&)backend_mutex/Mutex: backend_mutex (type: recursive_mutex &)"Mutex: m (type: light_rw_mutex &)mtxMutex: mtx (type: mutex &)__t†/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/forward.h:Mutex: __t (type: __libcpp_remove_reference_t<mutex *> &)JMutex: (unnamed parameter 0) (type: multi_thread_model<light_rw_mutex> &)*Mutex: backend_mutex (type: fake_mutex &)/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/allocator_traits.h$Mutex: m_Mutex (type: fake_mutex &)‡/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/allocator.h’/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UrlShortenService/UrlShortenHandler.h(unnamed parameter 2)/Mutex: (unnamed parameter 2) (type: mutex *&&)(unnamed parameter 3)/Mutex: (unnamed parameter 3) (type: mutex *&&)(unnamed parameter 4)/Mutex: (unnamed parameter 4) (type: mutex *&&)w/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/sasl/sasl.h:Mutex: (unnamed parameter 0) (type: sasl_mutex_alloc_t *)9Mutex: (unnamed parameter 1) (type: sasl_mutex_lock_t *);Mutex: (unnamed parameter 2) (type: sasl_mutex_unlock_t *)9Mutex: (unnamed parameter 3) (type: sasl_mutex_free_t *)†/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench/socialNetwork/src/UserService/UserHandler.h__pMutex: __p (type: mutex *)__cntrlGMutex: __cntrl (type: __shared_ptr_emplace<mutex, allocator<mutex>> *)CMutex: __x (type: __shared_ptr_emplace<mutex, allocator<mutex>> &)__alloc(Mutex: __alloc (type: allocator<mutex>)ƒ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__utility/move.h&Mutex: __t (type: allocator<mutex> &)'Mutex: __a (type: allocator<mutex> &&)(Mutex: __r (type: shared_ptr<mutex> &&))Mutex: __alloc_ (type: allocator<mutex>)Œ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/pointer_traits.hbMutex: __r (type: __conditional_t<false, __nat, __shared_ptr_emplace<mutex, allocator<mutex>>> &)>Mutex: (unnamed parameter 0) (type: const allocator<mutex> &)__padding2_198_FMutex: __padding2_198_ (type: __compressed_pair_padding<mutex, true>)__padding1_198_QMutex: __padding1_198_ (type: __compressed_pair_padding<allocator<mutex>, true>)CMutex: __p (type: __shared_ptr_emplace<mutex, allocator<mutex>> *)&Mutex: __x (type: allocator<mutex> &)Mutex: m (type: fake_mutex &)__ptrƒ/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__new/allocate.hXMutex: __ptr (type: __type_identity_t<__shared_ptr_emplace<mutex, allocator<mutex>>> *)__v_/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/datasizeof.h%Mutex: __v_ (type: allocator<mutex>)Mutex: __v_ (type: mutex)FMutex: __args (type: __shared_ptr_emplace<mutex, allocator<mutex>> *)ö1#select²vei súâ’ø † †&úâ’ø † †&«·ã’ø | |&·ã’ø | |&«Óã’ø T"T(Óã’ø T"T(«™¶“ø † †&™¶“ø † †&«¹¶“ø T"T(¹¶“ø T"T(«Ì»“ø † †&Ì»“ø † †&«ì»“ø T"T(ì»“ø T"T(«ÿÀ“ø † †&ÿÀ“ø † †&«ŸÁ“ø T"T(ŸÁ“ø T"T(«øÆ“ø † †&øÆ“ø † †&«˜Ç“ø T"T(˜Ç“ø T"T(««Ì“ø † †&«Ì“ø † †&«ËÌ“ø T"T(ËÌ“ø T"T(«·§”ø | |&·§”ø | |&«ß§”ø | |&ß§”ø | |&«™¨”ø | |&™¨”ø | |&«Á¨”ø | |&Á¨”ø | |&«é¨”ø | |&é¨”ø | |&«ô­”øÛàƒƒÙô­”øÛàƒƒ€å®”øÛàƒƒÙå®”øÛàƒƒ€œ¯”øÛàƒƒÙœ¯”øÛàƒƒ€¦´•øÛàîîÙ¦´•øÛàîî€™µ•øÛàîîÙ™µ•øÛàîî€¶•øÛàîîÙ¶•øÛàîî€Ë™šøÛà­Ë™šøÛàÓÚâ¢øÛàƒƒÙÚâ¢øÛàƒƒ€ıâ¢øÛàîîÙıâ¢øÛàîî€º’¤ø † †&º’¤ø † †&«Ú’¤ø T"T(Ú’¤ø T"T(«ğõ¤ø | |&ğõ¤ø | |&«÷¤øÛàƒƒÙ÷¤øÛàƒƒ€Ø‡¦øÛàîîÙØ‡¦øÛàîî€¾î¬øşƒËË‰¾î¬øşƒËË¯Ñî¬øşƒÆÆ‰Ñî¬øşƒÆÆ¯²¼­ø † †&²¼­ø † †&«è¼­ø T"T(è¼­ø T"T(«ÔÂ­ø † †&ÔÂ­ø † †&«ŠÃ­ø T"T(ŠÃ­ø T"T(«ê¬¯øÚâÜ.Ü4ë…¼¯ø | |&…¼¯ø | |&«ş½¯ø | |&ş½¯ø | |&«´È¯øÛàƒƒÙ´È¯øÛàƒƒ€³É¯øÛàƒƒÙ³É¯øÛàƒƒ€·¾°øÛàîîÙ·¾°øÛàîî€ª¿°øÛàîîÙª¿°øÛàîî€²·¸øÏÖ55äâÈø	’	g"g$è	ŸâÈø
+’	i7i8„
+ŸâÈø
+’	i7i8¨
+·­ÚøÑ
+ß
+Ñ>ÑJ±·­ÚøÑ
+ß
+Ñ>ÑJğÚ­Úø´ß
+Û%Û%¶‚®ÚøÒß
+§B§E×‚®ÚøÒß
+§B§E¬®ÚøÒß
+¹Y¹\ÈÏ®ÚøÒß
+¾S¾V×Ï®ÚøÒß
+¾S¾Vì®ÚøÒß
+â=â@…ì®ÚøÒß
+â=â@¾ş¯ÚøÒß
+ÖYÖ\È‹°ÚøÒß
+ÛSÛV×‹°ÚøÒß
+ÛSÛVÁ°ÚøÒß
+€O€R×Á°ÚøÒß
+€O€Rë°ÚøÒß
+uRuU…ë°ÚøÒß
+uRuU¾û°ÚøÒß
+bRbU…û°ÚøÒß
+bRbU¾½”İøüˆ33™™ÏŞøÒß
+ÖYÖ\º™ÏŞøÒß
+ÖYÖ\ô¥ÏŞøÒß
+ÛSÛV×¥ÏŞøÒß
+ÛSÛVÔÏŞøÒß
+ÖYÖ\ºÔÏŞøÒß
+ÖYÖ\ôàÏŞøÒß
+ÛSÛV×àÏŞøÒß
+ÛSÛVßÄâøÒß
+§B§E×ßÄâøÒß
+§B§EÅâøÒß
+¹Y¹\ºÅâøÒß
+¹Y¹\ô³ÅâøÒß
+¾S¾V×³ÅâøÒß
+¾S¾VèÅâøÑ
+ß
+Ñ>ÑJ±èÅâøÑ
+ß
+Ñ>ÑJğˆÆâø³ß
+ØCØJ¼Æâø´ß
+Û%Û%¶÷ÆâøÑ
+ß
+Ñ>ÑJ±÷ÆâøÑ
+ß
+Ñ>ÑJğ—Çâø³ß
+ØCØJ¼Çâø´ß
+Û%Û%¶ø÷âøÒß
+§B§E×ø÷âøÒß
+§B§E©øâøÒß
+¹Y¹\ı©øâøÒß
+¹Y¹\²ÌøâøÒß
+¾S¾V×ÌøâøÒß
+¾S¾VšúâøÒß
+§B§E×šúâøÒß
+§B§EËúâøÒß
+¹Y¹\ıËúâøÒß
+¹Y¹\²îúâøÒß
+¾S¾V×îúâøÒß
+¾S¾V±µèøüìGG™ˆñøüAA™Ã•ñø † †&Ã•ñø † †&«ã•ñø T"T(ã•ñø T"T(«ñïñø | |&ñïñø | |&«¬ÔòøŠâ¡¡“óøÒß
+§B§E×“óøÒß
+§B§EÄóøÒß
+¹Y¹\ºÄóøÒß
+¹Y¹\ôçóøÒß
+¾S¾V×çóøÒß
+¾S¾VõëóøÒß
+â=â@…õëóøÒß
+â=â@¾Æøø † †&Æøø † †&«½Æøø T"T(½Æøø T"T(«ëÕøø | |&ëÕøø | |&«òØøøÛàƒƒÙòØøøÛàƒƒ€óûøøÛàîîÙóûøøÛàîî€¸÷³É®:®HÆ–øıÉ¾$¾6“™øıÉ»»1“œøıÉ¸"¸4“ŸøıÉµ#µ5“¢øıÉ²&²8“¥øıÉ¯¯.“ªøıÉ«*«<ÎªøıÉ«*«<­øıÉ§%§7Î­øıÉ§%§7°øıÉ£(£:Î°øıÉ£(£:³øıÉŸ)Ÿ;Î³øıÉŸ)Ÿ;¶øıÉ›,›>Î¶øıÉ›,›>¹øıÉ˜˜1“»øıÉ••(Ü½øıÉ‘‘)ÜÀøıÉŒ"Œ0ÜÀøıÉŒ"Œ0“ÄøıÉ‰‰&ÜÆøıÉ„„&ÜÆøıÉ„„&“Èø³É…	…ÖÈø³É…	…­ÍøıÉ€(€6÷ÍøıÉ€(€6´ĞøıÉıı)Ü‡ù³ÉÁÁÆ‡ù³ÉÁÁıŠù³Éº º.ÆŠù³Éº º.ıŸ÷ÀÅÈ®÷ıÅíµ÷ıÅíĞŞ --¥ßŞ¿..Ã½¿..Ã¾ --¥æ¿..Ãç --¥¿..Ã --¥¸¿..Ã¹ --¥á¿..Ãâ --¥Ê½Ûö§§“ Ê½Ûö§§¼ ó½Ûö§§“ ó½Ûö§§¼ ı½Ûö§§“ ı½Ûö§§¼ ‡¾Ûö§§“ ‡¾Ûö§§¼ ‘¾Ûö§§“ ‘¾Ûö§§¼ éÍë à"ñ êÍ¦!à­!æ˜Ûà“'“*“ æ˜Ûà“'“*¼ ƒ¡ÛöéEéH“ ƒ¡ÛöéEéH¼ ‡¡ÛöU'U*“ ‡¡ÛöU'U*¼ ¯¡ÛöÌ2Ì5“ ¯¡ÛöÌ2Ì5¼ ¹¡Ûö°<°?“ ¹¡Ûö°<°?¼ ¾¡Ûö§§“ ¾¡Ûö§§¼ Æ¡Ûö—>—A“ Æ¡Ûö—>—A¼ Í¡Ûö‘3‘6“ Í¡Ûö‘3‘6¼ Ğ¡Ûö<!<$“ Ğ¡Ûö<!<$¼ Ø¡ıö7'78É!ß¡ıö66-É!¬ì ¿..Ã­ì  --¥È§!Ûö§§“ È§!Ûö§§¼ ¥%–"š"§=§?£#Ÿ¥%Ò#š"§W§YÖ#Ó¥%…$š"b0b2‰$ø¥%Àš"!!¸$±¦%…$š"L>L@Ù$¿¦%…$š"EEEGÙ$Ò¦%ıš"CC$‰%Ù¦%ıš"BB‰%ü¦%Ğ%š":C:EÔ%Š§%Ğ%š"6C6EÔ%”§%Ğ%š"2C2EÔ%ª§%Ğ%š"/C/EÔ%¿§%Ğ%š"+C+EÔ%Ô§%Ğ%š"&L&NÔ%»«%ıô%**"ü&Ã«%ıô%))ü&Û«%Àô%Á'ã«%Ğ%ô%$B$DÔ%ù«%Ğ%ô%9;Ô%æ%ıâ'A"A3ç(æ%³â'A7A;®)Áœ'ıƒİ:İKÛ)Âœ'³ƒİOİ`¢*Âœ'³ƒİOİ`Ú*Ìœ'ıƒÛ#Û0˜+Ôœ'ıƒÚÚ%˜+ùœ'ıà+    á+‚'ıà+    á+Ğ'¦!ƒ˜˜²,Ù'ë ƒ——ñ ÷Ê'¿..ÃøÊ' --¥ Ë'¿..Ã¡Ë' --¥Şñ'Àô%Á'“÷'Àš"!!¸$¡÷'Ğ%š":C:EÔ%©÷'Ğ%š"6C6EÔ%°±(Ğ%š"&L&NÔ%ø´(Ğ%ô%9;Ô%ûÛ(Ûö§§“ ûÛ(Ûö§§¼ …Ü(Ûö—>—A“ …Ü(Ûö—>—A¼ ¥Ü(Ûö§§“ ¥Ü(Ûö§§¼ ê°*Ú,é,ee%µ-¯±*æ-ß
+AAî-ø´*Ú,é,ee%µ-ÒÅ*æ-.kká.ˆò*æ-‡/¤¤Ì/‘ò*´‡/—+—+õ/„…+æ-‡/¸¸˜0Ï…+´‡/«(«(Ô0ú+Š1âÙEÙG1½+–"º1_aÂ2ô¨+İ2æ2b
+bõ3¬©+Š1â>@Æ4²©+Š1â•>•@Æ4—.ıà+    ê4¡.ıà+    ®5ğ.ıà+    ÷5ú.ıà+    ·6²™3Ğ%Ö~H~Jü6Ò™3Ğ%ÖyCyEü6“š3Ğ%ÖjKjMü6©š3Ğ%Öflfnü6½š3Ğ%Öbnbpü6Óš3Ğ%Ö^j^lü6èš3Ğ%ÖZ_Za¢7şš3Ğ%ÖV=V?¢7’›3Ğ%ÖQ>Q@¢7¨›3Ğ%ÖL;L=¢7Ù›3Ğ%Ö4\4^¢7”Ò5ıÒ7¢*¢>Ê8›Ò5ıÒ7¡¡3Ê8½Ò5ıÒ7ú ú*9ÄÒ5ıÒ7ùù9ÛÒ5ÀÒ7ŞŞ!Æ9åÒ5ıÒ7å$å2õ9ëÒ5ıÒ7ää'õ9òÒ5ë Ò7™™ñ óÒ5ÀÒ7˜	˜²:øÒ5ë Ò7òòñ ùÒ5ÀÒ7ñ	ñ²:¶?ıÌ:€7€Dš;–¶?ıÌ:+8š;•Bı‡/µ:µJÖ;Bı‡/´.´>Ö;½Bı‡/¡=¡P¢<ÆBı‡/ 1 D¢<«“Bıà+    ñ<´“Bıà+    ¼=‘CıŒ>mm%Ô>˜CıŒ>llÔ>Ü÷Kı–?-2-;à?å÷Kı–?,',0à?‡LÚ,é,ee%µ-¹âU˜@¥@33´AäUü¥@7.78ØA¢ÂVæ-‡/¤¤ûA©ÂVæ-‡/¸¸ûA½åV£BŒ>h
+h¨B„€XÄBâä>äCËBƒ˜XëBß
+È'È3ùB’˜XëBß
+Ò,Ò8ùB£˜XëBß
+È'È3ùB±˜XëBß
+Ò,Ò8ùBé˜X´‡/—+—+¨C™X´‡/«(«(¨Cé›XÊCŒ>qq!ÎCı´YéCíCACôDµYÄBâÙUÙZËB‹¥ZÄBâNSËBòºZı‡/YY®EûæZëBß
+=IùB¾çZëBß
+ÇAÇMùBæçZëBß
+ÇAÇMùBùîZæ-‡/Ì/Á³[ëBß
+=IøEÌ´[ëBß
+=IøEÚ´[´‡/„.„.õ/çÙ[ÄB¢F³7³<ËBğ[æ-‡/¤¤±Gš–\ÄBÕG˜Y˜^ËBëî]˜@İH))´AØğ]üİH22ØAêø]ğIà+    †Jæ‚^µJà+    ËJÈŠ^µJà+    ËJ¥–^úJà+    Kò™^µJà+    ËJô•_ı¿Kı!ı2¶Lö•_³¿Kı7ıGğLø•_ğI¿Kşş©Mú•_µJ¿Kşş,äMÄõb˜@Nkk´AªúbüNq&q0ØAŸƒc¿..Ã ƒc --¥€cÄBâä>äCËB±§cÛö§§“ ±§cÛö§§¼ ¯ÖcÄBâÙUÙZËBæÿcÄBâNSËBÑ‰d¤Oâ Q S¨OÒ‰dÃOâ a gËOî‰dŠ1â>@Æ4’Šd–"º1_a’P˜ŠdÕPæ24=4CİPò˜dëBß
+=IùBß×déC…Q"$‰Rë×dŠ1âË6Ë8¯Rò×d¤O¢F³'³)¨O‚ØdŠâä1ä3ÖRÆàdÄB¢F³7³<ËBÅâdİ2âÆ'Æ.şRÇâdŠ§S¬R¬T´TäâdıÕG`G`T–UöådÔUâÆÆFäU÷ådªVâÆÆFºVÒød¤O¢FÂeÂg¨Oáød¤OÕGtLtN‹Wğød–"º1_aÎWŒûdÄBÕG˜Y˜^ËB©e¤OÕG˜I˜K¨Oöˆe´‡/—+—+ôWé e’X˜Xff!œY•¢eôYùY"!"$‡[™¢eôYùY"!"$¬[ó§eÄB˜XG>GCÆ[ü†f¿..Ãı†f --¥­fÛö§§“ ­fÛö§§¼ ó---
+runFileName: run-info-20260121.000107.861.yml
+relativeBqrsPath: behavior-agent-queries/SynchronizationConstructs.bqrs
+metadata:
+  name: Synchronization Constructs
+  description: "Identifies synchronization primitives (mutex, locks, condition variables)."
+  kind: problem
+  id: cpp/synchronization-constructs
+  problem.severity: recommendation
+  tags: behavior-agent

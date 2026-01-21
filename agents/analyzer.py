@@ -88,6 +88,7 @@ actionable optimization guidance for a downstream optimizer agent.
 Input is JSON with:
 - summary_source: path to summary text (includes static signals like call graphs, hotspots, dependencies)
 - root_path: repository root to use for analysis and snippet/search tools
+- codeql_source (optional): path to CodeQL output.json or directory containing it
 
 ## Analysis Approach
 1) Understand system context from the summaries (architecture, services, dependencies, infra), which include static signals.
@@ -98,6 +99,7 @@ Input is JSON with:
 ## Tool Usage Strategy
 - Call build_analysis_bundle(summary_source, max_items=12) to normalize the summaries.
 - Use bundle summary sections and embedded signals to guide which code to inspect.
+- If codeql_source is provided (or CODEQL SUMMARY includes summary_path), use read_file to inspect output.json.
 - Prefer non-test paths; avoid prioritizing test-only hotspots unless no production paths exist.
 - Use search_codebase to locate concrete files/lines for high-impact patterns (e.g., async fan-out, redis usage, tracing).
 - When evidence is needed, use read_code_snippet with small, bounded windows (pass root_path).

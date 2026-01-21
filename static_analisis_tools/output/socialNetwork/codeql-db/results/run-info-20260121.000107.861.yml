@@ -1,0 +1,79 @@
+---
+queries:
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: ControlFlowStructure.ql
+  relativeBqrsPath: behavior-agent-queries/ControlFlowStructure.bqrs
+  metadata:
+    name: Control Flow Structure
+    description: "Reports control-flow structures like loops, conditionals, and switches."
+    kind: problem
+    id: cpp/control-flow-structure
+    problem.severity: recommendation
+    tags: behavior-agent
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: InteractionSites.ql
+  relativeBqrsPath: behavior-agent-queries/InteractionSites.bqrs
+  metadata:
+    name: Interaction Sites
+    description: "Detects interaction sites with external systems (Redis, MongoDB,\
+      \ etc.)."
+    kind: problem
+    id: cpp/interaction-sites
+    problem.severity: recommendation
+    tags: behavior-agent
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: InterproceduralCallGraphs.ql
+  relativeBqrsPath: behavior-agent-queries/InterproceduralCallGraphs.bqrs
+  metadata:
+    name: Interprocedural Call Graphs
+    description: "Builds call graph edges from entry points (main, handlers)."
+    kind: problem
+    id: cpp/interprocedural-call-graphs
+    problem.severity: recommendation
+    tags: behavior-agent
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: StaticEvidenceLinkage.ql
+  relativeBqrsPath: behavior-agent-queries/StaticEvidenceLinkage.bqrs
+  metadata:
+    name: Static Evidence Linkage
+    description: Links behavior-level abstractions to matching static evidence.
+    kind: problem
+    id: cpp/static-evidence-linkage
+    problem.severity: recommendation
+    tags: behavior-agent
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: StructuralExecutionPatterns.ql
+  relativeBqrsPath: behavior-agent-queries/StructuralExecutionPatterns.bqrs
+  metadata:
+    name: Structural Execution Patterns
+    description: Analyzes structural execution patterns such as loop nesting depth.
+    kind: problem
+    id: cpp/structural-execution-patterns
+    problem.severity: recommendation
+    tags: behavior-agent
+ -
+  pack: behavior-agent-queries#0
+  relativeQueryPath: SynchronizationConstructs.ql
+  relativeBqrsPath: behavior-agent-queries/SynchronizationConstructs.bqrs
+  metadata:
+    name: Synchronization Constructs
+    description: "Identifies synchronization primitives (mutex, locks, condition variables)."
+    kind: problem
+    id: cpp/synchronization-constructs
+    problem.severity: recommendation
+    tags: behavior-agent
+extensionPacks: []
+packs:
+  behavior-agent-queries#0:
+    name: behavior-agent-queries
+    version: 1.0.0
+    isLibrary: false
+    isExtensionPack: false
+    localPath: file:///Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/static_analisis_tools/custom_queries/behavior/
+    localPackDefinitionFile: file:///Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/static_analisis_tools/custom_queries/behavior/qlpack.yml
+    runDataExtensions: []

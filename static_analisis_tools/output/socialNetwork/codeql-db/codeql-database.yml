@@ -1,0 +1,13 @@
+---
+sourceLocationPrefix: /Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/DeathStarBench
+baselineLinesOfCode: 60952
+unicodeNewlines: false
+columnKind: utf8
+primaryLanguage: cpp
+creationMetadata:
+  sha: 6ecb09706140f8730b5385c08f1386c654c3c526
+  cliVersion: 2.23.9
+  creationTime: 2026-01-20T23:52:51.955610Z
+overlayBaseDatabase: false
+overlayDatabase: false
+finalised: true

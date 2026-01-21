@@ -28,8 +28,8 @@ load_dotenv()
 
 # Import all agents
 from agents import (AnalyzerAgent, BaseAgent, BehaviorSummarizerAgent,
-                    ComponentSummarizerAgent, EnvironmentSummarizerAgent,
-                    OptimizerAgent)
+                    CodeQLAgent, ComponentSummarizerAgent,
+                    EnvironmentSummarizerAgent, OptimizerAgent)
 from utils import RunManager
 # Import all workflows
 from workflows import orchestrate_complete_pipeline, orchestrate_summarizers
@@ -37,6 +37,7 @@ from workflows import orchestrate_complete_pipeline, orchestrate_summarizers
 # Registry of available agents and workflows
 AGENTS: dict[str, Type[BaseAgent]] = {
     "AnalyzerAgent": AnalyzerAgent,
+    "CodeQL": CodeQLAgent,
     "OptimizerAgent": OptimizerAgent,
     "BehaviorSummarizerAgent": BehaviorSummarizerAgent,
     "ComponentSummarizerAgent": ComponentSummarizerAgent,

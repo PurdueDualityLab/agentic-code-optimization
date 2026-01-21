@@ -1,7 +1,8 @@
 """LangGraph-based orchestrator for the complete optimization pipeline.
 
 This module implements a four-phase iterative pipeline:
-1. PHASE 1 - SUMMARIZATION: Run environment, component, and behavior summarizers in parallel
+1. PHASE 1 - SUMMARIZATION: Run environment, component, and behavior summarizers in parallel,
+   plus optional CodeQL summary
 2. PHASE 2 - ANALYSIS: Analyze summaries to produce optimization guidance with static signals
 3. PHASE 3 - OPTIMIZATION: Apply safe code improvements based on analysis
 4. PHASE 4 - CORRECTNESS CHECK: Validate applied changes for correctness and quality
@@ -14,6 +15,7 @@ through a LangGraph workflow with iterative refinement.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Literal, Optional, Type, TypedDict
@@ -22,8 +24,9 @@ from beautilog import logger
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
-                    OptimizerAgent, orchestrate_code_correctness)
+from agents import (AnalysisReport, AnalyzerAgent, CodeQLAgent,
+                    OptimizationReport, OptimizerAgent,
+                    orchestrate_code_correctness)
 
 from .summary_orchestrator import orchestrate_summarizers
 
@@ -91,7 +94,7 @@ def build_pipeline_state(phases: list[PipelinePhase]) -> Type[TypedDict]:
 
 # Define pipeline phases in execution order
 _PIPELINE_PHASES = [
-    PipelinePhase("summarization", None, return_fields=["summary_text"]),
+    PipelinePhase("summarization", None, return_fields=["summary_text", "codeql_summary"]),
     PipelinePhase(
         "analysis",
         None,
@@ -121,7 +124,7 @@ async def summary_node(state: PipelineState) -> dict:
 
     Executes the summarization orchestrator in parallel and combines
     environment, component, and behavior summaries into a single text blob
-    for downstream agents.
+    for downstream agents. Includes CodeQL summary when configured.
 
     Args:
         state: Pipeline state containing code_path
@@ -132,6 +135,52 @@ async def summary_node(state: PipelineState) -> dict:
     iteration = state.get("iteration_count", 0) + 1
     logger.info(f"PHASE 1: Running summarization orchestrator (iteration {iteration}/{MAX_ITERATIONS})")
     summaries = await orchestrate_summarizers(state["code_path"])
+    codeql_summary = ""
+    codeql_source = os.getenv("CODEQL_REPORT_PATH", "").strip()
+    codeql_src = os.getenv("CODEQL_SRC", "").strip()
+    codeql_rel_path = os.getenv("CODEQL_REL_PATH", "").strip()
+    target_path = Path(state["code_path"]).expanduser().resolve()
+
+    if codeql_src and not codeql_rel_path:
+        try:
+            src_path = Path(codeql_src).expanduser().resolve()
+            if target_path == src_path:
+                codeql_rel_path = "."
+            elif target_path.is_relative_to(src_path):
+                codeql_rel_path = str(target_path.relative_to(src_path))
+        except Exception:
+            pass
+
+    if not codeql_src and not codeql_source and target_path.exists():
+        parent = target_path.parent
+        # Prefer a root whose parent holds local deps/includes.
+        if (
+            (parent / "deps").exists()
+            or (parent / "local_include").exists()
+            or (parent / "local_lib").exists()
+        ):
+            codeql_src = str(target_path)
+            if not codeql_rel_path:
+                codeql_rel_path = "."
+        else:
+            codeql_src = str(parent)
+            if not codeql_rel_path:
+                codeql_rel_path = target_path.name
+    if codeql_source or codeql_src:
+        logger.info("PHASE 1: Running CodeQLAgent")
+        codeql_agent = CodeQLAgent()
+        payload: dict[str, str] = {}
+        if codeql_source:
+            payload["codeql_source"] = codeql_source
+        if codeql_src:
+            payload["codeql_src"] = codeql_src
+        if codeql_rel_path:
+            payload["codeql_rel_path"] = codeql_rel_path
+        
+        # Enforce custom queries path as requested by user
+        payload["codeql_queries"] = "/Users/antoniozhong/Documents/dev/purdue/agentic/agentic-code-optimization/static_analisis_tools/custom_queries"
+        
+        codeql_summary = await codeql_agent.run(json.dumps(payload))
 
     summary_text = (
         "ENVIRONMENT SUMMARY:\n"
@@ -141,9 +190,17 @@ async def summary_node(state: PipelineState) -> dict:
         "BEHAVIOR SUMMARY:\n"
         f"{summaries.get('behavior_summary', '')}\n"
     )
+    if codeql_summary:
+        summary_text = (
+            f"{summary_text}\n\nCODEQL SUMMARY:\n{codeql_summary}\n"
+        )
 
     logger.info(f"PHASE 1: Summarization complete ({len(summary_text)} chars)")
-    return {"summary_text": summary_text, "iteration_count": iteration}
+    return {
+        "summary_text": summary_text,
+        "codeql_summary": codeql_summary,
+        "iteration_count": iteration,
+    }
 
 
 async def analyze_node(state: PipelineState) -> dict:
@@ -182,6 +239,47 @@ async def analyze_node(state: PipelineState) -> dict:
             "summary_source": str(summary_path),
             "root_path": state["code_path"],
         }
+        codeql_source = os.getenv("CODEQL_REPORT_PATH", "").strip()
+        
+        # Try to get CodeQL output from previous step
+        codeql_result_json = state.get("codeql_summary", "")
+        if codeql_result_json:
+            try:
+                codeql_data = json.loads(codeql_result_json)
+                # CodeQLAgent returns CodeQLRunResult, we want summary_path (output.json) or output_base
+                if isinstance(codeql_data, dict):
+                    logger.info(f"PHASE 2: Received CodeQL output from previous phase:\n{json.dumps(codeql_data, indent=2)}")
+                    
+                    # Prefer summary_path (output.json) if available
+                    if codeql_data.get("summary_path"):
+                        codeql_source = codeql_data["summary_path"]
+                        logger.info(f"PHASE 2: Using CodeQL summary path: {codeql_source}")
+                    # Fallback to output_base (directory)
+                    elif codeql_data.get("output_base"):
+                        codeql_source = codeql_data["output_base"]
+                        logger.info(f"PHASE 2: Using CodeQL output base: {codeql_source}")
+            except json.JSONDecodeError:
+                logger.warning("PHASE 2: Failed to parse CodeQL summary JSON")
+                pass
+
+        if codeql_source:
+            logger.info(f"PHASE 2: Passing CodeQL source to Analyzer: {codeql_source}")
+            payload["codeql_source"] = codeql_source
+
+            # Log content preview if it looks like a file
+            try:
+                source_path = Path(codeql_source)
+                if source_path.is_file() and source_path.exists():
+                    content = source_path.read_text(encoding="utf-8")
+                    preview_len = 2000
+                    preview = content[:preview_len]
+                    if len(content) > preview_len:
+                        preview += f"\n... (truncated, total {len(content)} chars)"
+                    logger.info(f"PHASE 2: CodeQL Output Preview ({source_path.name}):\n{preview}")
+            except Exception as e:
+                logger.warning(f"PHASE 2: Could not read CodeQL source file for preview: {e}")
+        else:
+            logger.info("PHASE 2: No CodeQL source found to pass to Analyzer")
 
         result = await agent.run(json.dumps(payload))
         logger.info("PHASE 2: Analysis complete")
@@ -427,6 +525,7 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
         Final pipeline state containing dynamically generated fields:
         - code_path: Input repository path
         - summary_text: Combined summaries from final iteration
+        - codeql_summary: CodeQL run metadata when CODEQL_REPORT_PATH or CODEQL_SRC is set
         - analysis_report: Structured AnalysisReport JSON from final iteration
         - optimization_report: Final OptimizationReport JSON from final iteration
         - analysis_result: Detailed correctness analysis from final iteration
