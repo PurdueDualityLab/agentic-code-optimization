@@ -125,6 +125,49 @@ def parse_wrk_output(output: str) -> Dict[str, Any]:
     return metrics
 
 
+def parse_jmeter_output(output: str) -> Dict[str, Any]:
+    """Parse JMeter CLI output and extract summary metrics."""
+    metrics: Dict[str, Any] = {
+        "latency_ms": {},
+        "percentiles_ms": {},
+        "requests_per_sec": 0.0,
+        "error_rate": 0.0,
+    }
+
+    # Example line:
+    # summary = 1809335 in 00:14:41 = 2054.3/s Avg: 4 Min: 0 Max: 15003 Err: 1780589 (98.41%)
+    # summary +  55747 in 00:00:10 = 5653.3/s Avg:     1 Min:     0 Max:   202 Err: 55747 (100.00%) Active: 10 Started: 10 Finished: 0
+    matches = re.findall(
+        r"summary \s*[+=]\s+(\d+)\s+in\s+([\d:]+)\s+=\s+([\d\.]+)/s\s+Avg:\s+(\d+)\s+Min:\s+(\d+)\s+Max:\s+(\d+)\s+Err:\s+(\d+)\s+\(([\d\.]+)%\)",
+        output,
+    )
+    if matches:
+        # Take the last match (most recent summary)
+        last_match = matches[-1]
+        metrics["total_requests"] = int(last_match[0])
+        duration_str = last_match[1]
+        # simplistic duration parsing hh:mm:ss
+        parts = list(map(int, duration_str.split(":")))
+        duration_seconds = 0.0
+        if len(parts) == 3:
+             duration_seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+        elif len(parts) == 2:
+             duration_seconds = parts[0] * 60 + parts[1]
+        metrics["duration_seconds"] = duration_seconds
+        
+        metrics["requests_per_sec"] = float(last_match[2])
+        metrics["latency_ms"]["avg"] = float(last_match[3])
+        metrics["latency_ms"]["min"] = float(last_match[4])
+        metrics["latency_ms"]["max"] = float(last_match[5])
+        
+        err_count = int(last_match[6])
+        err_pct = float(last_match[7])
+        metrics["error_count"] = err_count
+        metrics["error_rate"] = err_pct
+
+    return metrics
+
+
 def compare_benchmark_metrics(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
     """Compare benchmark metrics before vs after."""
     def delta(before_val: Optional[float], after_val: Optional[float]) -> Dict[str, Any]:
@@ -164,6 +207,8 @@ def compare_benchmark_metrics(before: Dict[str, Any], after: Dict[str, Any]) -> 
             before_metrics.get("percentiles_ms", {}).get("99.000"),
             after_metrics.get("percentiles_ms", {}).get("99.000"),
         ),
+        # metrics specific to JMeter
+        "error_rate": delta(before_metrics.get("error_rate"), after_metrics.get("error_rate")),
     }
     return comparison
 
@@ -212,17 +257,17 @@ def render_benchmark_charts(
     labels = [
         name
         for name, item in latency_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
     before_vals = [
-        item["before"]
+        item.get("before") or 0.0
         for name, item in latency_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
     after_vals = [
-        item["after"]
+        item.get("after") or 0.0
         for name, item in latency_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
 
     if labels:
@@ -248,17 +293,17 @@ def render_benchmark_charts(
     labels = [
         name
         for name, item in throughput_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
     before_vals = [
-        item["before"]
+        item.get("before") or 0.0
         for name, item in throughput_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
     after_vals = [
-        item["after"]
+        item.get("after") or 0.0
         for name, item in throughput_items
-        if item and item["before"] is not None and item["after"] is not None
+        if item and (item.get("before") is not None or item.get("after") is not None)
     ]
 
     if labels:
@@ -288,15 +333,45 @@ def _run_benchmark_command_impl(
     output_dir: str,
     label: str,
 ) -> Dict[str, Any]:
+    cwd = Path(workdir).resolve() if workdir else Path.cwd().resolve()
+    
+    # Auto-detection for default command
     if not command:
-        command = os.environ.get(command_env, "")
+        # Check if we are in or near TeaStore
+        teastore_dir = cwd / "TeaStore"
+        teastore_parent = cwd.parent / "TeaStore"
+        
+        is_teastore = False
+        if cwd.name == "TeaStore" or (cwd / "examples" / "jmeter").exists():
+             is_teastore = True
+        elif teastore_dir.exists():
+             cwd = teastore_dir
+             is_teastore = True
+        elif teastore_parent.exists():
+             cwd = teastore_parent
+             is_teastore = True
+             
+        if is_teastore:
+            # Default TeaStore JMeter command
+            jmeter_script = "examples/jmeter/teastore_browse_nogui.jmx"
+            if (cwd / jmeter_script).exists():
+                command = f"jmeter -n -t {jmeter_script} -Jhostname localhost -Jport 8080 -JnumUser 10 -JrampUp 1"
+            else:
+                 # Fallback or error if script not found?
+                 pass
+        else:
+             # Default to existing behavior (DeathStarBench env var or empty)
+             command = os.environ.get(command_env, "")
+
+    if not command:
+         # Double check if command_env is set even if we didn't suspect TeaStore
+         command = os.environ.get(command_env, "")
 
     use_shell = isinstance(command, str)
     argv = _normalize_command(command) if not use_shell else []
     if (use_shell and not command) or (not use_shell and not argv):
         return {"error": "empty_command", "command_env": command_env}
-
-    cwd = Path(workdir).resolve() if workdir else Path.cwd().resolve()
+    
     if not cwd.exists():
         return {"error": "workdir_not_found", "workdir": str(cwd)}
 
@@ -319,6 +394,10 @@ def _run_benchmark_command_impl(
         timed_out = True
         stdout_text = exc.stdout or ""
         stderr_text = exc.stderr or ""
+        if isinstance(stdout_text, bytes):
+            stdout_text = stdout_text.decode("utf-8", errors="replace")
+        if isinstance(stderr_text, bytes):
+            stderr_text = stderr_text.decode("utf-8", errors="replace")
         exit_code = None
     except FileNotFoundError:
         return {"error": "command_not_found", "command": argv}
@@ -327,7 +406,12 @@ def _run_benchmark_command_impl(
 
     duration = time.monotonic() - start
 
-    metrics = parse_wrk_output(stdout_text) or parse_wrk_output(stderr_text)
+    # Detect parser
+    cmd_str = command if use_shell else " ".join(argv)
+    if "jmeter" in cmd_str:
+        metrics = parse_jmeter_output(stdout_text)
+    else:
+        metrics = parse_wrk_output(stdout_text) or parse_wrk_output(stderr_text)
 
     payload: Dict[str, Any] = {
         "command": command if use_shell else argv,
@@ -384,5 +468,61 @@ async def run_benchmark_command(
         output_dir,
         label,
     )
+    return json.dumps(payload)
+
+
+@tool
+async def run_benchmark_comparison(
+    command_env: str = "BENCHMARK_CMD",
+    workdir: str = "",
+    timeout_seconds: int = 1800,
+    output_dir: str = "",
+    render_charts: bool = True,
+) -> str:
+    """Run benchmark commands before/after and return comparison payload."""
+    command_before = os.environ.get(command_env, "")
+    command_after = os.environ.get(command_env, "")
+
+    before = await asyncio.to_thread(
+        _run_benchmark_command_impl,
+        command_before,
+        command_env,
+        workdir,
+        timeout_seconds,
+        output_dir,
+        "before",
+    )
+    after = await asyncio.to_thread(
+        _run_benchmark_command_impl,
+        command_after,
+        command_env,
+        workdir,
+        timeout_seconds,
+        output_dir,
+        "after",
+    )
+
+    if "error" in before:
+        return json.dumps({"error": "before_failed", "before": before})
+    if "error" in after:
+        return json.dumps({"error": "after_failed", "after": after})
+
+    comparison = compare_benchmark_metrics(before, after)
+    payload: Dict[str, Any] = {
+        "before": before,
+        "after": after,
+        "comparison": comparison,
+    }
+
+    if output_dir:
+        report_paths = write_benchmark_report(
+            Path(output_dir), before, after, comparison
+        )
+        payload["report_paths"] = report_paths
+        if render_charts:
+            payload["charts"] = render_benchmark_charts(
+                Path(output_dir), comparison, before, after
+            )
+
     return json.dumps(payload)
 
