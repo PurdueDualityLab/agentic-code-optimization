@@ -29,3 +29,4 @@ from .environment import (analyze_repo_structure, check_git_config,
 from .optimizer import (apply_snippet_patch, apply_snippet_patch_guarded,
                         load_analysis_report, load_summary_text,
                         preview_snippet_patch, preview_snippet_patch_guarded)
+from .codeql import teastore_codeql_analyzer
