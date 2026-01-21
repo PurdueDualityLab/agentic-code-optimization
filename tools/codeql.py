@@ -428,29 +428,36 @@ libraryPathDependencies:
 # ============================================================================
 
 
-def _create_query_files(queries_dir: Path, query_text: str, rule_id: str, tool_name: str) -> None:
-    """Write CodeQL query files to the specified directory.
+def _create_query_files_multi(
+    queries_dir: Path, queries: dict[str, str], rule_ids: list[str], tool_name: str
+) -> None:
+    """Write multiple CodeQL query files to the specified directory.
 
     Args:
         queries_dir: Directory where query files should be written
-        query_text: CodeQL query text to write
-        rule_id: Rule ID to include in the single-query suite
+        queries: Dict mapping query filenames to query text
+        rule_ids: List of rule IDs to include in the suite
         tool_name: Tool name for unique directory naming
     """
     queries_dir.mkdir(parents=True, exist_ok=True)
 
-    suite_text = """- description: TeaStore Single Query
+    # Write all query files
+    for filename, query_text in queries.items():
+        (queries_dir / filename).write_text(query_text)
+
+    # Create suite that includes all queries
+    suite_rules = "\n      - ".join(rule_ids)
+    suite_text = f"""- description: TeaStore Multi-Query Analysis
 - queries: .
 - include:
     id:
-      - {rule_id}
-""".format(rule_id=rule_id)
+      - {suite_rules}
+"""
 
-    (queries_dir / "query.ql").write_text(query_text)
     (queries_dir / "teastore-analysis.qls").write_text(suite_text)
     (queries_dir / "qlpack.yml").write_text(QLPACK_YML)
 
-    logger.info(f"Created CodeQL query files in {queries_dir} for {tool_name}")
+    logger.info(f"Created {len(queries)} CodeQL query files in {queries_dir} for {tool_name}")
 
 
 def _run_codeql_analysis(repo_path: Path, tool_name: str, queries_dir_name: str) -> Path:
@@ -574,6 +581,29 @@ def _parse_sarif_for_rule(sarif_path: Path, rule_id: str) -> list[dict[str, str]
     return results
 
 
+def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[dict[str, str]]]:
+    """Parse SARIF results for multiple rules and return grouped by rule ID."""
+    logger.info(f"Parsing SARIF results from {sarif_path} for {len(rule_ids)} rules")
+
+    with open(sarif_path) as f:
+        sarif_data = json.load(f)
+
+    # Initialize results dict for all rule IDs
+    results_by_rule: dict[str, list[dict[str, str]]] = {rule_id: [] for rule_id in rule_ids}
+
+    for run in sarif_data.get("runs", []):
+        for result in run.get("results", []):
+            rule_id = result.get("ruleId", "")
+            if rule_id not in rule_ids:
+                continue
+            message_text = result.get("message", {}).get("text", "")
+            parsed = _parse_kv_message(message_text)
+            if parsed:
+                results_by_rule[rule_id].append(parsed)
+
+    return results_by_rule
+
+
 def _cleanup_analysis_files(repo_path: Path, queries_dir_name: str, tool_name: str) -> None:
     """Remove temporary CodeQL analysis files and directories.
 
@@ -602,8 +632,11 @@ def _cleanup_analysis_files(repo_path: Path, queries_dir_name: str, tool_name: s
             logger.warning(f"Failed to remove {results_dir}: {e}")
 
 
-def _run_query_tool(repo_path: str, query_text: str, rule_id: str, tool_name: str) -> str:
-    logger.info(f"Starting TeaStore CodeQL analysis with {tool_name} for: {repo_path}")
+def _run_multi_query_tool(
+    repo_path: str, queries: dict[str, str], rule_ids: list[str], tool_name: str
+) -> str:
+    """Run multiple CodeQL queries and return combined results."""
+    logger.info(f"Starting TeaStore CodeQL multi-query analysis with {tool_name} for: {repo_path}")
     repo_path_obj = Path(repo_path).resolve()
 
     # Create unique directory names based on tool
@@ -614,27 +647,29 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str, tool_name: st
         error_msg = f"Repository path does not exist: {repo_path}"
         logger.error(error_msg)
         return json.dumps(
-            {"success": False, "error": error_msg, "endpoints": [], "microservices": []},
+            {"success": False, "error": error_msg, "results": {}},
             indent=2,
         )
 
     try:
         queries_dir = repo_path_obj / queries_dir_name
-        _create_query_files(queries_dir, query_text, rule_id, tool_name)
+        _create_query_files_multi(queries_dir, queries, rule_ids, tool_name)
 
         sarif_path = _run_codeql_analysis(repo_path_obj, tool_name, queries_dir_name)
-        results = _parse_sarif_for_rule(sarif_path, rule_id)
+        results_by_rule = _parse_sarif_multi(sarif_path, rule_ids)
 
-        # Step 5: Clean up temporary files
+        # Clean up temporary files
         _cleanup_analysis_files(repo_path_obj, queries_dir_name, tool_name)
+
+        # Calculate total findings
+        total_findings = sum(len(results) for results in results_by_rule.values())
 
         logger.info(f"TeaStore CodeQL analysis completed successfully for {tool_name}")
         return json.dumps(
             {
                 "success": True,
-                "rule_id": rule_id,
-                "results": results,
-                "total_findings": len(results),
+                "results": results_by_rule,
+                "total_findings": total_findings,
             },
             indent=2,
         )
@@ -644,8 +679,7 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str, tool_name: st
         return json.dumps(
             {
                 "success": False,
-                "rule_id": rule_id,
-                "results": [],
+                "results": {},
                 "total_findings": 0,
                 "error": error_msg,
             },
@@ -659,265 +693,112 @@ def _run_query_tool(repo_path: str, query_text: str, rule_id: str, tool_name: st
 
 
 # ============================================================================
-# CODEQL ANALYSIS TOOLS
+# CODEQL COMBINED ANALYSIS TOOLS
 # ============================================================================
 
 
 @tool
-def teastore_find_microservices(repo_path: str) -> str:
-    """Find TeaStore microservices for the environment summary.
+def teastore_component_analysis(repo_path: str) -> str:
+    """Comprehensive component analysis for TeaStore architecture.
 
-    Analyzes package structure to identify all microservices in the TeaStore architecture.
-    Detects significant components like servlets, endpoints, REST services, and applications.
-    Uses pattern matching on package names and class naming conventions.
+    Runs all component-related CodeQL queries in a single analysis pass:
+    - Microservice identification (package structure analysis)
+    - Endpoint discovery (servlets, REST endpoints, controllers)
+    - Component inventory (packages, classes, methods)
+    - Hierarchical composition (containment and inheritance)
+    - Exported HTTP endpoints (public API surface)
+    - Exported public API (all public methods)
+    - Call-based dependencies (method invocations)
+    - Type-based dependencies (compile-time references)
+    - Resource-based dependencies (URLs, file paths)
+
+    This tool is optimized for ComponentSummarizerAgent to gather complete structural information
+    about the TeaStore microservices architecture in a single Docker run.
 
     Returns JSON:
     {
       "success": bool,
-      "rule_id": "teastore/find-microservices",
-      "results": [ {kv pairs...}, ... ],
+      "results": {
+        "teastore/find-microservices-simple": [{kv pairs...}, ...],
+        "teastore/find-all-endpoints": [{kv pairs...}, ...],
+        "teastore/component-inventory": [{kv pairs...}, ...],
+        "teastore/hierarchical-composition": [{kv pairs...}, ...],
+        "teastore/exported-http-endpoints": [{kv pairs...}, ...],
+        "teastore/exported-public-api": [{kv pairs...}, ...],
+        "teastore/deps-call-based": [{kv pairs...}, ...],
+        "teastore/deps-type-based": [{kv pairs...}, ...],
+        "teastore/deps-resource-based": [{kv pairs...}, ...]
+      },
       "total_findings": int,
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, FIND_MICROSERVICES_QUERY, "teastore/find-microservices", "find_microservices")
+    queries = {
+        "find-microservices.ql": FIND_MICROSERVICES_QUERY,
+        "find-endpoints.ql": FIND_ENDPOINTS_QUERY,
+        "component-inventory.ql": COMPONENT_INVENTORY_QUERY,
+        "hierarchical-composition.ql": HIERARCHICAL_COMPOSITION_QUERY,
+        "exported-http-endpoints.ql": EXPORTED_HTTP_ENDPOINTS_QUERY,
+        "exported-public-api.ql": EXPORTED_PUBLIC_API_QUERY,
+        "deps-call-based.ql": DEPS_CALL_BASED_QUERY,
+        "deps-type-based.ql": DEPS_TYPE_BASED_QUERY,
+        "deps-resource-based.ql": DEPS_RESOURCE_BASED_QUERY,
+    }
+
+    rule_ids = [
+        "teastore/find-microservices-simple",
+        "teastore/find-all-endpoints",
+        "teastore/component-inventory",
+        "teastore/hierarchical-composition",
+        "teastore/exported-http-endpoints",
+        "teastore/exported-public-api",
+        "teastore/deps-call-based",
+        "teastore/deps-type-based",
+        "teastore/deps-resource-based",
+    ]
+
+    return _run_multi_query_tool(repo_path, queries, rule_ids, "component_analysis")
+
 
 
 @tool
-def teastore_find_endpoints(repo_path: str) -> str:
-    """Find TeaStore endpoints for the environment summary.
+def teastore_behavior_analysis(repo_path: str) -> str:
+    """Comprehensive behavior analysis for TeaStore execution patterns.
 
-    Identifies all HTTP endpoint classes including servlets, REST endpoints, and controllers.
-    Discovers the entry points where external requests are handled in the microservices.
-    Provides location information and service classification for each endpoint.
+    Runs all behavior-related CodeQL queries in a single analysis pass:
+    - Rooted call graph (interprocedural call chains depth-5)
+    - Control flow structure (if/for/while/switch constructs)
+    - Interaction sites (external calls and database access)
+    - Synchronization constructs (thread-safety mechanisms)
 
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/find-endpoints",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, FIND_ENDPOINTS_QUERY, "teastore/find-endpoints", "find_endpoints")
-
-
-@tool
-def teastore_component_inventory(repo_path: str) -> str:
-    """Component Summary Agent tool: component inventory.
-
-    Captures a complete inventory of packages, classes, and methods for each TeaStore service.
-    Provides comprehensive structural information including file locations and line numbers.
-    Essential for understanding the overall composition and size of each microservice.
+    This tool is optimized for BehaviorSummarizerAgent to gather complete runtime behavior
+    information about the TeaStore microservices in a single Docker run.
 
     Returns JSON:
     {
       "success": bool,
-      "rule_id": "teastore/component-inventory",
-      "results": [ {kv pairs...}, ... ],
+      "results": {
+        "teastore/rooted-call-graph-depth5": [{kv pairs...}, ...],
+        "teastore/control-flow-structure": [{kv pairs...}, ...],
+        "teastore/interaction-sites": [{kv pairs...}, ...],
+        "teastore/synchronization-constructs": [{kv pairs...}, ...]
+      },
       "total_findings": int,
       "error": optional str
     }
     """
-    return _run_query_tool(repo_path, COMPONENT_INVENTORY_QUERY, "teastore/component-inventory", "component_inventory")
-
-
-@tool
-def teastore_hierarchical_composition(repo_path: str) -> str:
-    """Component Summary Agent tool: hierarchical composition.
-
-    Captures package/class/method containment relationships and inheritance hierarchies.
-    Maps the parent-child structure showing how components are organized and related.
-    Reveals design patterns through class inheritance and composition analysis.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/hierarchical-composition",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
+    queries = {
+        "rooted-call-graph-depth5.ql": ROOTED_CALL_GRAPH_DEPTH5_QUERY,
+        "control-flow-structure.ql": CONTROL_FLOW_STRUCTURE_QUERY,
+        "interaction-sites.ql": INTERACTION_SITES_QUERY,
+        "synchronization-constructs.ql": SYNCHRONIZATION_CONSTRUCTS_QUERY,
     }
-    """
-    return _run_query_tool(repo_path, HIERARCHICAL_COMPOSITION_QUERY, "teastore/hierarchical-composition", "hierarchical_composition")
 
+    rule_ids = [
+        "teastore/rooted-call-graph-depth5",
+        "teastore/control-flow-structure",
+        "teastore/interaction-sites",
+        "teastore/synchronization-constructs",
+    ]
 
-@tool
-def teastore_exported_http_endpoints(repo_path: str) -> str:
-    """Component Summary Agent tool: exported HTTP endpoints.
-
-    Identifies endpoint classes exposed via HTTP based on naming conventions.
-    Focuses on REST endpoints and HTTP-accessible service interfaces.
-    Helps understand the public-facing API surface of each microservice.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/exported-http-endpoints",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, EXPORTED_HTTP_ENDPOINTS_QUERY, "teastore/exported-http-endpoints", "exported_http_endpoints")
-
-
-@tool
-def teastore_exported_public_api(repo_path: str) -> str:
-    """Component Summary Agent tool: exported public API surface.
-
-    Captures all public methods exposed by services across the codebase.
-    Analyzes method visibility to determine the public contract of each service.
-    Critical for understanding inter-service communication and API design.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/exported-public-api",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, EXPORTED_PUBLIC_API_QUERY, "teastore/exported-public-api", "exported_public_api")
-
-
-@tool
-def teastore_deps_call_based(repo_path: str) -> str:
-    """Component Summary Agent tool: call-based dependencies.
-
-    Analyzes method call edges to map how methods invoke each other across the codebase.
-    Reveals runtime dependencies and communication patterns between components.
-    Essential for understanding control flow and service interactions.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/deps-call-based",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, DEPS_CALL_BASED_QUERY, "teastore/deps-call-based", "deps_call_based")
-
-
-@tool
-def teastore_deps_type_based(repo_path: str) -> str:
-    """Component Summary Agent tool: type-based dependencies.
-
-    Captures type references to understand compile-time dependencies between classes.
-    Shows which types are used where, revealing coupling and structural dependencies.
-    Helps identify opportunities for decoupling and modularization.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/deps-type-based",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, DEPS_TYPE_BASED_QUERY, "teastore/deps-type-based", "deps_type_based")
-
-
-@tool
-def teastore_deps_resource_based(repo_path: str) -> str:
-    """Component Summary Agent tool: resource-based dependencies.
-
-    Identifies resource references such as URLs, file paths, and API endpoints in string literals.
-    Discovers external service dependencies and configuration requirements.
-    Critical for understanding deployment dependencies and integration points.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/deps-resource-based",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, DEPS_RESOURCE_BASED_QUERY, "teastore/deps-resource-based", "deps_resource_based")
-
-
-@tool
-def teastore_rooted_call_graph_depth5(repo_path: str) -> str:
-    """Behavior Summary Agent tool: rooted call graph depth 5.
-
-    Captures interprocedural call graph edges within TeaStore packages for behavior analysis.
-    Maps the complete flow of method invocations to understand execution paths.
-    Supports depth-5 analysis for comprehensive understanding of call chains.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/rooted-call-graph-depth5",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, ROOTED_CALL_GRAPH_DEPTH5_QUERY, "teastore/rooted-call-graph-depth5", "rooted_call_graph_depth5")
-
-
-@tool
-def teastore_control_flow_structure(repo_path: str) -> str:
-    """Behavior Summary Agent tool: control flow structure.
-
-    Analyzes control-flow statements including if/for/while/switch constructs.
-    Reveals branching complexity and iteration patterns in the codebase.
-    Helps understand algorithmic complexity and potential optimization opportunities.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/control-flow-structure",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, CONTROL_FLOW_STRUCTURE_QUERY, "teastore/control-flow-structure", "control_flow_structure")
-
-
-@tool
-def teastore_interaction_sites(repo_path: str) -> str:
-    """Behavior Summary Agent tool: interaction sites.
-
-    Identifies external calls and database access points throughout the codebase.
-    Discovers integration points with external systems, APIs, and databases.
-    Critical for understanding system boundaries and external dependencies.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/interaction-sites",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, INTERACTION_SITES_QUERY, "teastore/interaction-sites", "interaction_sites")
-
-
-@tool
-def teastore_synchronization_constructs(repo_path: str) -> str:
-    """Behavior Summary Agent tool: synchronization constructs.
-
-    Detects synchronized blocks and methods to analyze concurrency patterns.
-    Identifies thread-safety mechanisms and potential synchronization bottlenecks.
-    Essential for understanding concurrent execution and performance characteristics.
-
-    Returns JSON:
-    {
-      "success": bool,
-      "rule_id": "teastore/synchronization-constructs",
-      "results": [ {kv pairs...}, ... ],
-      "total_findings": int,
-      "error": optional str
-    }
-    """
-    return _run_query_tool(repo_path, SYNCHRONIZATION_CONSTRUCTS_QUERY, "teastore/synchronization-constructs", "synchronization_constructs")
+    return _run_multi_query_tool(repo_path, queries, rule_ids, "behavior_analysis")

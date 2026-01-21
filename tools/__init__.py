@@ -29,13 +29,4 @@ from .environment import (analyze_repo_structure, check_git_config,
 from .optimizer import (apply_snippet_patch, apply_snippet_patch_guarded,
                         load_analysis_report, load_summary_text,
                         preview_snippet_patch, preview_snippet_patch_guarded)
-from .codeql import (teastore_component_inventory,
-                     teastore_control_flow_structure,
-                     teastore_deps_call_based, teastore_deps_resource_based,
-                     teastore_deps_type_based, teastore_exported_http_endpoints,
-                     teastore_exported_public_api, teastore_find_endpoints,
-                     teastore_find_microservices,
-                     teastore_hierarchical_composition,
-                     teastore_interaction_sites,
-                     teastore_rooted_call_graph_depth5,
-                     teastore_synchronization_constructs)
+from .codeql import teastore_behavior_analysis, teastore_component_analysis

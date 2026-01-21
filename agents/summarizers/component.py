@@ -16,13 +16,7 @@ from tools.component import (analyze_classes, analyze_component_boundaries,
                              analyze_inheritance_hierarchy,
                              analyze_module_structure, analyze_public_apis,
                              analyze_service_architecture)
-from tools.codeql import (teastore_component_inventory,
-                          teastore_deps_call_based, teastore_deps_resource_based,
-                          teastore_deps_type_based,
-                          teastore_exported_http_endpoints,
-                          teastore_exported_public_api, teastore_find_endpoints,
-                          teastore_find_microservices,
-                          teastore_hierarchical_composition)
+from tools.codeql import teastore_component_analysis
 
 
 class ComponentSummarizerAgent(BaseAgent):
@@ -93,11 +87,8 @@ Your task is to analyze code and provide a comprehensive summary of its structur
 
 ## Tool Usage Strategy
 
-- **For TeaStore repositories**: Use the CodeQL tools to collect structure signals:
-  teastore_find_microservices, teastore_find_endpoints, teastore_component_inventory,
-  teastore_hierarchical_composition, teastore_exported_http_endpoints,
-  teastore_exported_public_api, teastore_deps_call_based, teastore_deps_type_based,
-  teastore_deps_resource_based.
+- **For TeaStore repositories**: Use teastore_component_analysis to collect all structural signals
+  in a single pass (microservices, endpoints, inventory, composition, APIs, dependencies).
 - Start with analyze_module_structure to understand overall organization
 - Use analyze_classes to get a detailed view of all classes
 - Apply analyze_inheritance_hierarchy to understand inheritance patterns
@@ -147,15 +138,7 @@ Provide a structured analysis including:
    return_state_field = "component_analysis"
 
    tools = [
-      teastore_find_microservices,
-      teastore_find_endpoints,
-      teastore_component_inventory,
-      teastore_hierarchical_composition,
-      teastore_exported_http_endpoints,
-      teastore_exported_public_api,
-      teastore_deps_call_based,
-      teastore_deps_type_based,
-      teastore_deps_resource_based,
+      teastore_component_analysis,  # Combined TeaStore component analysis
       analyze_module_structure,
       analyze_classes,
       analyze_inheritance_hierarchy,
