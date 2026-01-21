@@ -16,6 +16,7 @@ from tools.component import (analyze_classes, analyze_component_boundaries,
                              analyze_inheritance_hierarchy,
                              analyze_module_structure, analyze_public_apis,
                              analyze_service_architecture)
+from tools.codeql import teastore_codeql_analyzer
 
 
 class ComponentSummarizerAgent(BaseAgent):
@@ -86,6 +87,8 @@ Your task is to analyze code and provide a comprehensive summary of its structur
 
 ## Tool Usage Strategy
 
+- **For TeaStore repositories**: Start with teastore_codeql_analyzer to identify microservices and endpoints
+  using static analysis. This provides a comprehensive architecture overview specific to TeaStore.
 - Start with analyze_module_structure to understand overall organization
 - Use analyze_classes to get a detailed view of all classes
 - Apply analyze_inheritance_hierarchy to understand inheritance patterns
@@ -135,6 +138,7 @@ Provide a structured analysis including:
    return_state_field = "component_analysis"
 
    tools = [
+      teastore_codeql_analyzer,  # TeaStore-specific microservices analysis
       analyze_module_structure,
       analyze_classes,
       analyze_inheritance_hierarchy,
