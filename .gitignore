@@ -73,3 +73,10 @@ static_analisis_tools/output/
 **/codeql-db/
 **/*.bqrs
 **/*.sarif
+output/
+
+# CodeQL generated artifacts
+output/
+**/codeql-db/
+**/*.bqrs
+**/*.sarif
