@@ -398,21 +398,21 @@ def build_complete_pipeline() -> CompiledStateGraph:
     """Build the complete six-phase optimization pipeline with iteration loop.
 
     Constructs a LangGraph StateGraph from phase definitions that orchestrates:
-    1. Summarization (parallel environment, component, behavior summaries)
-    2. Analysis (structured guidance based on summaries with static signals)
-    3. Optimization (apply safe code improvements)
+    1. Benchmark (before) (run external benchmark command)
+    2. Summarization (parallel environment, component, behavior summaries)
+    3. Analysis (structured guidance based on summaries with static signals)
     4. Optimization (apply safe code improvements)
     5. Correctness Check (orchestrates pain analysis and structured verdict)
     6. Benchmark (after) (run external benchmark command)
     7. Loop decision (conditionally loop back to benchmark-before or end)
 
     The workflow follows a sequential DAG with conditional loop:
-    START → summarization → analysis → optimization → correctness_check → (loop decision) → {summarization | END}
+    START → benchmark_before → summarization → analysis → optimization → correctness_check → benchmark_after → (loop decision) → {benchmark_before | END}
 
     State fields are dynamically generated from phase definitions:
+    - benchmark_before → benchmark_before
     - summarization → summary_text
     - analysis → analysis_report
-    - benchmark_before → benchmark_before
     - optimization → optimization_report
     - correctness_check → analysis_result, correctness_verdict, correctness_report
     - benchmark_after → benchmark_after, benchmark_report
@@ -497,9 +497,9 @@ async def orchestrate_complete_pipeline(
 
     Executes the optimization pipeline with iterative refinement through dynamically
     configured phases:
-    1. Summarization: Generates environment, component, and behavior summaries
-    2. Analysis: Produces structured optimization guidance with static analysis
-    3. Optimization: Applies safe code improvements
+    1. Benchmark (before): Captures baseline benchmark metrics
+    2. Summarization: Generates environment, component, and behavior summaries
+    3. Analysis: Produces structured optimization guidance with static analysis
     4. Optimization: Applies safe code improvements
     5. Correctness Check: Validates applied changes for correctness and quality
     6. Benchmark (after): Runs external benchmark command if configured
@@ -516,10 +516,10 @@ async def orchestrate_complete_pipeline(
     Returns:
         Final pipeline state containing dynamically generated fields:
         - code_path: Input repository path
+        - benchmark_before: Baseline benchmark JSON from final iteration
         - summary_text: Combined summaries from final iteration
         - analysis_report: Structured AnalysisReport JSON from final iteration
         - optimization_report: Final OptimizationReport JSON from final iteration
-        - benchmark_before: Baseline benchmark JSON from final iteration
         - analysis_result: Detailed correctness analysis from final iteration
         - correctness_verdict: Yes/No verdict from final iteration
         - correctness_report: Combined correctness report JSON from final iteration
