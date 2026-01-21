@@ -2,7 +2,7 @@
 
 from .analysis import (build_analysis_bundle, read_code_snippet, read_file,
                        search_codebase)
-from .benchmark import run_benchmark_command, run_benchmark_comparison
+from .benchmark import run_benchmark_command
 from .behavior import (analyze_code_complexity, analyze_code_structure,
                        analyze_data_dependencies,
                        analyze_error_handling_strategy,

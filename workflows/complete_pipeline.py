@@ -1,12 +1,13 @@
 """LangGraph-based orchestrator for the complete optimization pipeline.
 
-This module implements a five-phase iterative pipeline:
-1. PHASE 1 - SUMMARIZATION: Run environment, component, and behavior summarizers in parallel
-2. PHASE 2 - ANALYSIS: Analyze summaries to produce optimization guidance with static signals
-3. PHASE 3 - OPTIMIZATION: Apply safe code improvements based on analysis
-4. PHASE 4 - CORRECTNESS CHECK: Validate applied changes for correctness and quality
-5. PHASE 5 - BENCHMARK: Run external benchmark command if configured
-6. LOOP: Conditionally loop back to summarization or exit based on iteration count
+This module implements a six-phase iterative pipeline:
+1. PHASE 1 - BENCHMARK (BEFORE): Run external benchmark command to capture baseline
+2. PHASE 2 - SUMMARIZATION: Run environment, component, and behavior summarizers in parallel
+3. PHASE 3 - ANALYSIS: Analyze summaries to produce optimization guidance with static signals
+4. PHASE 4 - OPTIMIZATION: Apply safe code improvements based on analysis
+5. PHASE 5 - CORRECTNESS CHECK: Validate applied changes for correctness and quality
+6. PHASE 6 - BENCHMARK (AFTER): Run external benchmark command to capture post-change
+7. LOOP: Conditionally loop back to benchmark-before or exit based on iteration count
 
 The pipeline uses temporary files for inter-agent communication and manages state flow
 through a LangGraph workflow with iterative refinement.
@@ -23,9 +24,10 @@ from beautilog import logger
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents import (AnalysisReport, AnalyzerAgent, BenchmarkAgent,
-                    BenchmarkReport, OptimizationReport, OptimizerAgent,
-                    orchestrate_code_correctness)
+from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
+                    OptimizerAgent, orchestrate_code_correctness)
+from tools.benchmark import (compare_benchmark_metrics, render_benchmark_charts,
+                             run_benchmark_command, write_benchmark_report)
 
 from .summary_orchestrator import orchestrate_summarizers
 
@@ -81,6 +83,7 @@ def build_pipeline_state(phases: list[PipelinePhase]) -> Type[TypedDict]:
     state_fields: dict[str, Type] = {
         "code_path": str,
         "iteration_count": int,
+        "benchmark_output_dir": str,
     }
 
     # Add state fields from each phase's return fields
@@ -93,6 +96,7 @@ def build_pipeline_state(phases: list[PipelinePhase]) -> Type[TypedDict]:
 
 # Define pipeline phases in execution order
 _PIPELINE_PHASES = [
+    PipelinePhase("benchmark_before", None, return_fields=["benchmark_before"]),
     PipelinePhase("summarization", None, return_fields=["summary_text"]),
     PipelinePhase(
         "analysis",
@@ -112,16 +116,26 @@ _PIPELINE_PHASES = [
         return_fields=["analysis_result", "correctness_verdict", "correctness_report"],
         return_class=tuple,  # Composite: (AnalysisResult, CorrectnessVerdict)
     ),
-    PipelinePhase(
-        "benchmark",
-        None,
-        agent_class=BenchmarkAgent,
-        return_class=BenchmarkReport,
-    ),
+    PipelinePhase("benchmark_after", None, return_fields=["benchmark_after", "benchmark_report"]),
 ]
 
 # Dynamically build PipelineState from phase definitions
 PipelineState = build_pipeline_state(_PIPELINE_PHASES)
+
+
+async def benchmark_before_node(state: PipelineState) -> dict:
+    """PHASE 1: Run baseline benchmark before optimization."""
+    logger.info("PHASE 1: Running baseline benchmark (before)")
+    output_dir = state.get("benchmark_output_dir", "")
+    payload = {
+        "command_env": "BENCHMARK_CMD",
+        "workdir": state["code_path"],
+        "label": "before",
+        "output_dir": output_dir,
+    }
+    result = await run_benchmark_command.ainvoke(payload)
+    logger.info("PHASE 1: Baseline benchmark complete")
+    return {"benchmark_before": result}
 
 
 async def summary_node(state: PipelineState) -> dict:
@@ -138,7 +152,7 @@ async def summary_node(state: PipelineState) -> dict:
         Dictionary with combined summary_text and incremented iteration_count
     """
     iteration = state.get("iteration_count", 0) + 1
-    logger.info(f"PHASE 1: Running summarization orchestrator (iteration {iteration}/{MAX_ITERATIONS})")
+    logger.info(f"PHASE 2: Running summarization orchestrator (iteration {iteration}/{MAX_ITERATIONS})")
     summaries = await orchestrate_summarizers(state["code_path"])
 
     summary_text = (
@@ -150,7 +164,7 @@ async def summary_node(state: PipelineState) -> dict:
         f"{summaries.get('behavior_summary', '')}\n"
     )
 
-    logger.info(f"PHASE 1: Summarization complete ({len(summary_text)} chars)")
+    logger.info(f"PHASE 2: Summarization complete ({len(summary_text)} chars)")
     return {"summary_text": summary_text, "iteration_count": iteration}
 
 
@@ -173,7 +187,7 @@ async def analyze_node(state: PipelineState) -> dict:
     Returns:
         Dictionary with analysis_report (JSON string)
     """
-    logger.info("PHASE 2: Running AnalyzerAgent")
+    logger.info("PHASE 3: Running AnalyzerAgent")
     agent = AnalyzerAgent()
 
     with tempfile.TemporaryDirectory(prefix="analysis_inputs_") as temp_dir:
@@ -183,7 +197,7 @@ async def analyze_node(state: PipelineState) -> dict:
         # Write summary to temporary file
         summary_path.write_text(state.get("summary_text", ""), encoding="utf-8")
 
-        logger.info("PHASE 2: Analyzer input files created")
+        logger.info("PHASE 3: Analyzer input files created")
 
         # Create payload with file paths for the agent to read
         payload = {
@@ -192,7 +206,7 @@ async def analyze_node(state: PipelineState) -> dict:
         }
 
         result = await agent.run(json.dumps(payload))
-        logger.info("PHASE 2: Analysis complete")
+        logger.info("PHASE 3: Analysis complete")
 
     return {"analysis_report": result}
 
@@ -218,7 +232,7 @@ async def optimize_node(state: PipelineState) -> dict:
     Returns:
         Dictionary with optimization_report (JSON string)
     """
-    logger.info("PHASE 3: Running OptimizerAgent")
+    logger.info("PHASE 4: Running OptimizerAgent")
     agent = OptimizerAgent()
 
     with tempfile.TemporaryDirectory(prefix="optimizer_inputs_") as temp_dir:
@@ -230,7 +244,7 @@ async def optimize_node(state: PipelineState) -> dict:
         analysis_path.write_text(state.get("analysis_report", ""), encoding="utf-8")
         summary_path.write_text(state.get("summary_text", ""), encoding="utf-8")
 
-        logger.info("PHASE 3: Optimizer input files created")
+        logger.info("PHASE 4: Optimizer input files created")
 
         # Create payload with file paths for the agent to read
         payload = {
@@ -240,40 +254,64 @@ async def optimize_node(state: PipelineState) -> dict:
         }
 
         result = await agent.run(json.dumps(payload))
-        logger.info("PHASE 3: Optimization complete")
+        logger.info("PHASE 4: Optimization complete")
 
     return {"optimization_report": result}
 
 
-async def benchmark_node(state: PipelineState) -> dict:
-    """PHASE 5: Run benchmark command to measure performance impact.
-
-    Uses BenchmarkAgent to execute an external benchmark command configured
-    via environment variable (BENCHMARK_CMD by default). The benchmark
-    runs in the repository root unless overridden.
-
-    Args:
-        state: Pipeline state containing code_path
-
-    Returns:
-        Dictionary with benchmark_report (JSON string)
-    """
-    logger.info("PHASE 5: Running BenchmarkAgent")
-    agent = BenchmarkAgent()
-
+async def benchmark_after_node(state: PipelineState) -> dict:
+    """PHASE 6: Run benchmark after optimization and compare with baseline."""
+    logger.info("PHASE 6: Running post-optimization benchmark (after)")
+    output_dir = state.get("benchmark_output_dir", "")
     payload = {
         "command_env": "BENCHMARK_CMD",
         "workdir": state["code_path"],
+        "label": "after",
+        "output_dir": output_dir,
+    }
+    after_raw = await run_benchmark_command.ainvoke(payload)
+    logger.info("PHASE 6: Post-optimization benchmark complete")
+
+    before_raw = state.get("benchmark_before", "")
+    try:
+        before = json.loads(before_raw) if before_raw else {}
+    except json.JSONDecodeError:
+        before = {}
+    try:
+        after = json.loads(after_raw) if after_raw else {}
+    except json.JSONDecodeError:
+        after = {}
+
+    comparison = compare_benchmark_metrics(before, after)
+    report = {
+        "benchmark_name": Path(state["code_path"]).name,
+        "command_env": "BENCHMARK_CMD",
+        "workdir": state["code_path"],
+        "before": before,
+        "after": after,
+        "comparison": comparison,
     }
 
-    result = await agent.run(json.dumps(payload))
-    logger.info("PHASE 5: Benchmark complete")
+    report_paths = {}
+    charts = {}
+    if output_dir:
+        report_paths = write_benchmark_report(
+            Path(output_dir), before, after, comparison
+        )
+        charts = render_benchmark_charts(
+            Path(output_dir), comparison, before, after
+        )
+        report["report_paths"] = report_paths
+        report["charts"] = charts
 
-    return {"benchmark_report": result}
+    return {
+        "benchmark_after": after_raw,
+        "benchmark_report": json.dumps(report, indent=2),
+    }
 
 
 async def correctness_check_node(state: PipelineState) -> dict:
-    """PHASE 4: Run code correctness workflow.
+    """PHASE 5: Run code correctness workflow.
 
     Orchestrates a two-phase correctness check:
     - Phase 4a: Detailed analysis of applied code changes
@@ -285,7 +323,7 @@ async def correctness_check_node(state: PipelineState) -> dict:
     Returns:
         Dictionary with analysis_result and correctness_verdict
     """
-    logger.info("PHASE 4: Running code correctness workflow")
+    logger.info("PHASE 5: Running code correctness workflow")
 
     # Parse the optimization report to extract applied changes
     try:
@@ -319,7 +357,7 @@ async def correctness_check_node(state: PipelineState) -> dict:
         code_snippet=code_snippet,
     )
 
-    logger.info("PHASE 4: Code correctness workflow complete")
+    logger.info("PHASE 5: Code correctness workflow complete")
 
     return {
         "analysis_result": correctness_state.get("analysis_result", ""),
@@ -357,15 +395,16 @@ def should_continue_loop(state: PipelineState) -> Literal["summarization", str]:
 
 
 def build_complete_pipeline() -> CompiledStateGraph:
-    """Build the complete five-phase optimization pipeline with iteration loop.
+    """Build the complete six-phase optimization pipeline with iteration loop.
 
     Constructs a LangGraph StateGraph from phase definitions that orchestrates:
     1. Summarization (parallel environment, component, behavior summaries)
     2. Analysis (structured guidance based on summaries with static signals)
     3. Optimization (apply safe code improvements)
-    4. Correctness Check (orchestrates pain analysis and structured verdict)
-    5. Benchmark (run external benchmark command)
-    6. Loop decision (conditionally loop back to summarization or end)
+    4. Optimization (apply safe code improvements)
+    5. Correctness Check (orchestrates pain analysis and structured verdict)
+    6. Benchmark (after) (run external benchmark command)
+    7. Loop decision (conditionally loop back to benchmark-before or end)
 
     The workflow follows a sequential DAG with conditional loop:
     START → summarization → analysis → optimization → correctness_check → (loop decision) → {summarization | END}
@@ -373,9 +412,10 @@ def build_complete_pipeline() -> CompiledStateGraph:
     State fields are dynamically generated from phase definitions:
     - summarization → summary_text
     - analysis → analysis_report
+    - benchmark_before → benchmark_before
     - optimization → optimization_report
     - correctness_check → analysis_result, correctness_verdict, correctness_report
-    - benchmark → benchmark_report
+    - benchmark_after → benchmark_after, benchmark_report
 
     Returns:
         Compiled LangGraph StateGraph ready for invocation
@@ -385,11 +425,12 @@ def build_complete_pipeline() -> CompiledStateGraph:
 
     # Map phase names to node functions
     node_functions = {
+        "benchmark_before": benchmark_before_node,
         "summarization": summary_node,
         "analysis": analyze_node,
         "optimization": optimize_node,
         "correctness_check": correctness_check_node,
-        "benchmark": benchmark_node,
+        "benchmark_after": benchmark_after_node,
     }
 
     # Add nodes from phase definitions
@@ -426,7 +467,7 @@ def build_complete_pipeline() -> CompiledStateGraph:
     return workflow.compile()
 
 
-def _build_initial_state(code_path: str) -> dict[str, Any]:
+def _build_initial_state(code_path: str, benchmark_output_dir: str = "") -> dict[str, Any]:
     """Build initial state with all dynamic fields initialized.
 
     Args:
@@ -438,6 +479,7 @@ def _build_initial_state(code_path: str) -> dict[str, Any]:
     initial_state = {
         "code_path": code_path,
         "iteration_count": 0,
+        "benchmark_output_dir": benchmark_output_dir,
     }
 
     # Initialize all return fields from phases with empty strings
@@ -448,7 +490,9 @@ def _build_initial_state(code_path: str) -> dict[str, Any]:
     return initial_state
 
 
-async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
+async def orchestrate_complete_pipeline(
+    code_path: str, benchmark_output_dir: str = ""
+) -> PipelineState:
     """Run the complete optimization pipeline end-to-end.
 
     Executes the optimization pipeline with iterative refinement through dynamically
@@ -456,9 +500,10 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
     1. Summarization: Generates environment, component, and behavior summaries
     2. Analysis: Produces structured optimization guidance with static analysis
     3. Optimization: Applies safe code improvements
-    4. Correctness Check: Validates applied changes for correctness and quality
-    5. Benchmark: Runs external benchmark command if configured
-    6. Loop: Conditionally iterates up to MAX_ITERATIONS times
+    4. Optimization: Applies safe code improvements
+    5. Correctness Check: Validates applied changes for correctness and quality
+    6. Benchmark (after): Runs external benchmark command if configured
+    7. Loop: Conditionally iterates up to MAX_ITERATIONS times
 
     State fields are dynamically generated from phase definitions:
     - Phase outputs are automatically added to state based on agent.return_state_field
@@ -474,10 +519,12 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
         - summary_text: Combined summaries from final iteration
         - analysis_report: Structured AnalysisReport JSON from final iteration
         - optimization_report: Final OptimizationReport JSON from final iteration
+        - benchmark_before: Baseline benchmark JSON from final iteration
         - analysis_result: Detailed correctness analysis from final iteration
         - correctness_verdict: Yes/No verdict from final iteration
         - correctness_report: Combined correctness report JSON from final iteration
-        - benchmark_report: BenchmarkReport JSON from final iteration
+        - benchmark_after: Post-optimization benchmark JSON from final iteration
+        - benchmark_report: Combined benchmark comparison JSON from final iteration
         - iteration_count: Number of iterations completed
     """
     logger.info(f"Starting complete optimization pipeline for {code_path}")
@@ -486,7 +533,7 @@ async def orchestrate_complete_pipeline(code_path: str) -> PipelineState:
 
     workflow = build_complete_pipeline()
 
-    initial_state = _build_initial_state(code_path)
+    initial_state = _build_initial_state(code_path, benchmark_output_dir)
     final_state: PipelineState = await workflow.ainvoke(initial_state)
 
     logger.info("Complete optimization pipeline finished")

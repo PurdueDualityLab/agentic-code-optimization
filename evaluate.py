@@ -29,7 +29,7 @@ load_dotenv()
 
 # Import all agents
 from agents import (AnalyzerAgent, BaseAgent, BehaviorSummarizerAgent,
-                    BenchmarkAgent, ComponentSummarizerAgent,
+                    ComponentSummarizerAgent,
                     EnvironmentSummarizerAgent, OptimizerAgent)
 from utils import RunManager
 # Import all workflows
@@ -42,7 +42,6 @@ AGENTS: dict[str, Type[BaseAgent]] = {
     "BehaviorSummarizerAgent": BehaviorSummarizerAgent,
     "ComponentSummarizerAgent": ComponentSummarizerAgent,
     "EnvironmentSummarizerAgent": EnvironmentSummarizerAgent,
-    "BenchmarkAgent": BenchmarkAgent,
 }
 
 WORKFLOWS: dict[str, Callable] = {
@@ -104,17 +103,7 @@ async def evaluate_agent(agent_class: Type[BaseAgent], repo_path: str) -> None:
     try:
         logger.info(f"Starting agent execution for repository: {repo_path_obj.absolute()}")
         start_time = time.time()
-        if agent_class is BenchmarkAgent:
-            benchmark_dir = run_dir / "benchmark"
-            payload = {
-                "command_env": "BENCHMARK_CMD",
-                "workdir": str(repo_path_obj.absolute()),
-                "output_dir": str(benchmark_dir),
-                "render_charts": True,
-            }
-            result = await agent.run(json.dumps(payload))
-        else:
-            result = await agent.run(str(repo_path_obj.absolute()))
+        result = await agent.run(str(repo_path_obj.absolute()))
         execution_time = time.time() - start_time
         logger.info(f"Agent execution completed successfully, result length: {len(result) if result else 0}")
         logger.info(f"RESULT:\n{result}")
@@ -193,7 +182,14 @@ async def evaluate_workflow(workflow_func: Callable, repo_path: str) -> None:
     try:
         logger.info(f"Starting workflow execution for repository: {repo_path_obj.absolute()}")
         start_time = time.time()
-        result = await workflow_func(str(repo_path_obj.absolute()))
+        if workflow_func.__name__ == "orchestrate_complete_pipeline":
+            benchmark_dir = run_dir / "benchmark"
+            result = await workflow_func(
+                str(repo_path_obj.absolute()),
+                benchmark_output_dir=str(benchmark_dir),
+            )
+        else:
+            result = await workflow_func(str(repo_path_obj.absolute()))
         execution_time = time.time() - start_time
         logger.info(f"Workflow execution completed successfully")
         logger.info(f"RESULT:\n{result}")
