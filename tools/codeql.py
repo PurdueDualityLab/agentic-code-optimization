@@ -171,15 +171,33 @@ def _run_codeql_analysis(repo_path: Path) -> Path:
     ]
 
     try:
-        result = subprocess.run(
+        # Use Popen to stream output in real-time
+        process = subprocess.Popen(
             docker_cmd,
             cwd=repo_path,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout
             text=True,
-            check=True,
+            bufsize=1,  # Line buffered
         )
+
+        # Stream output line by line
+        output_lines = []
+        if process.stdout:
+            for line in process.stdout:
+                line = line.rstrip()
+                print(line)  # Stream to stdout
+                output_lines.append(line)
+                logger.debug(f"Docker: {line}")
+
+        # Wait for process to complete
+        return_code = process.wait()
+
+        if return_code != 0:
+            error_output = "\n".join(output_lines[-20:])  # Last 20 lines
+            raise RuntimeError(f"CodeQL analysis failed with exit code {return_code}:\n{error_output}")
+
         logger.info("CodeQL analysis completed successfully")
-        logger.debug(f"Docker output: {result.stdout}")
 
         sarif_path = repo_path / "codeql-agent-results" / "issues.sarif"
         if not sarif_path.exists():
@@ -190,6 +208,9 @@ def _run_codeql_analysis(repo_path: Path) -> Path:
     except subprocess.CalledProcessError as e:
         logger.error(f"Docker command failed: {e.stderr}")
         raise RuntimeError(f"CodeQL analysis failed: {e.stderr}")
+    except Exception as e:
+        logger.error(f"Unexpected error during CodeQL analysis: {e}")
+        raise RuntimeError(f"CodeQL analysis failed: {str(e)}")
 
 
 def _parse_sarif_results(sarif_path: Path) -> dict[str, list[str]]:
