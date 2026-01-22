@@ -38,6 +38,14 @@ Output: Optimized Code + Recommendations
 - Handles tool binding, execution, state tracking, iteration counting
 - Tracks: `iteration_count` (LLM calls only), `tools_used_count` (total tool executions), `tools_used_names` (unique tools)
 - Built-in logging at INFO level for major steps, DEBUG level for detailed state inspection
+- **Middleware Support**: 7 built-in middleware for enhanced capabilities (see docs/MIDDLEWARE.md)
+  - Summarization: Auto-compress conversation history
+  - To-do list: Task planning for multi-step operations
+  - LLM tool selector: Intelligent tool filtering
+  - Tool retry: Automatic retry with exponential backoff
+  - Context editing: Automatic context cleanup
+  - Shell tool: Persistent shell session
+  - File search: Glob and regex search over filesystem
 
 **`providers/` - LLM Provider Abstraction**
 - `base.py`: `BaseProvider` abstract class and `ProviderResponse` format
@@ -264,6 +272,15 @@ max_iterations = 30
 default_provider = ollama
 temperature = 0.7
 
+# Middleware (optional) - see docs/MIDDLEWARE.md for details
+enable_summarization = false
+enable_todo_list = false
+enable_llm_tool_selector = false
+enable_tool_retry = false
+enable_context_editing = false
+enable_shell_tool = false
+enable_file_search = false
+
 [ollama]
 base_url = http://localhost:11434
 model = devstral-2:123b
@@ -305,16 +322,19 @@ config = ConfigParser.get(OllamaConfig)
 
 | File | Purpose |
 |------|---------|
-| `agents/base.py` | Core agent framework with LangGraph integration |
+| `agents/base.py` | Core agent framework with LangGraph integration and middleware support |
 | `agents/summarizers/` | Specialized summarizer agents |
 | `providers/registry.py` | Provider factory and management |
 | `config/parser.py` | Configuration loading system |
+| `config/agents.py` | Agent configuration including middleware settings |
 | `utils/runs.py` | Run directory and artifact management |
 | `utils/metrics.py` | Execution metrics and observability |
 | `evaluate.py` | Main evaluation/execution script |
-| `config.ini` | Provider configuration |
+| `config.ini` | Provider and middleware configuration |
 | `.env.example` | Environment variables template |
 | `requirements.txt` | Pinned dependencies |
+| `docs/MIDDLEWARE.md` | **Complete middleware guide and examples** |
+| `examples/middleware_example.py` | Example agent using middleware |
 
 ## Dependencies
 
@@ -337,8 +357,16 @@ config = ConfigParser.get(OllamaConfig)
 - Use `logger.debug()` for detailed state inspection during development
 - Return state field is configurable per agent via `return_state_field` class attribute
 
-## Recent Changes (2025-01-12)
+## Recent Changes
 
+### 2025-01-22: Middleware Support
+- ✅ Added 7 built-in middleware from LangChain for enhanced agent capabilities
+- ✅ Configuration-driven middleware via `config.ini` [agents] section
+- ✅ Comprehensive documentation in `docs/MIDDLEWARE.md`
+- ✅ Example implementation in `examples/middleware_example.py`
+- ✅ Middleware: Summarization, To-do list, LLM tool selector, Tool retry, Context editing, Shell tool, File search
+
+### 2025-01-12: Framework Improvements
 - ✅ Consolidated `agentic_logging/` and `observability/` modules into `utils/`
 - ✅ Replaced async execution with synchronous `run()` for better logging
 - ✅ Added comprehensive debug logging for state inspection

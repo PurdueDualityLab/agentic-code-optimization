@@ -7,8 +7,9 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from agents.base import BaseAgent
-from tools.analysis import (build_analysis_bundle, read_code_snippet, read_file,
-                            search_codebase)
+from tools.analysis import (build_analysis_bundle, read_code_snippet,
+                            read_file, search_codebase)
+
 
 class PriorityItem(BaseModel):
     """Optimization priority with supporting evidence."""
@@ -102,6 +103,7 @@ Input is JSON with:
 - Use search_codebase to locate concrete files/lines for high-impact patterns (e.g., async fan-out, redis usage, tracing).
 - When evidence is needed, use read_code_snippet with small, bounded windows (pass root_path).
 - Never read entire files.
+- Retry failed tools with updated arguements once.
 
 ## Decision Rules
 - Prioritize changes that reduce latency, CPU, memory, or tail latency in service calls.
@@ -109,29 +111,16 @@ Input is JSON with:
 - If endpoints are not detected, do not infer endpoint behavior; note the gap.
 - If a priority involves concurrency, reuse an existing executor/pool if found; otherwise mark as needs_inspection.
 - Avoid proposing schema/key changes unless an existing migration or compatibility layer is evident.
+- Feel free to suggest restructing modules/functions for better performance if evidence supports it.
+- SUggest removing nested function calls if applicable.
 
 ## Output Constraints
 - suggested_focus_files[].file must be a concrete repo-relative file path (no descriptions, no globs, no directories).
-- Prefer paths cited in the summary text or snippet evidence.
-- If you cannot name a concrete file path, omit the entry.
 - If you used read_code_snippet, include evidence_file and evidence_lines for that priority.
 - Only include evidence_snippet when it comes from read_code_snippet.
-- Only include priorities that have evidence_file and evidence_lines. If evidence is missing, move it to next_steps
   prefixed with "needs_inspection:" and omit it from priorities.
-- Add optimizer_constraints:
-  - Only modify priorities that include evidence_file and evidence_lines, or after confirming with read_code_snippet.
-  - Limit edits to files listed in suggested_focus_files.
-  - If a priority lacks concrete evidence, treat it as needs_inspection until confirmed.
 - After any tool calls, respond with a single JSON object that conforms to the AnalysisReport schema.
-- Do not emit tool calls in the final response.
 
-Keys:
-- priorities: list of {title, rationale, evidence, impact, confidence}
-- risks_and_gaps: list of {issue, impact, evidence}
-- suggested_focus_files: list of {file, reason}
-- data_dependencies: list of {ecosystem, count, notes}
-- next_steps: list of short actions for an optimizer agent
-- optimizer_constraints: list of guardrails for the optimizer agent
 """
 
     structured_output_type = AnalysisReport
@@ -142,6 +131,6 @@ Keys:
     tools = [
         build_analysis_bundle,
         read_code_snippet,
-        read_file,
-        search_codebase,
+        # read_file,
+        # search_codebase,
     ]

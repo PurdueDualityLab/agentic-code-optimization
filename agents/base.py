@@ -10,12 +10,21 @@ This module provides a declarative agent framework where:
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from beautilog import logger
 from langchain.agents import create_agent
-from langchain_core.messages import (AIMessage, HumanMessage, ToolMessage,
-                                     trim_messages)
+from langchain.agents.middleware import (ClearToolUsesEdit,
+                                         ContextEditingMiddleware,
+                                         FilesystemFileSearchMiddleware,
+                                         HostExecutionPolicy,
+                                         LLMToolSelectorMiddleware,
+                                         ShellToolMiddleware,
+                                         SummarizationMiddleware,
+                                         TodoListMiddleware,
+                                         ToolRetryMiddleware)
+from langchain_core.messages import trim_messages
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 
@@ -69,6 +78,116 @@ class BaseAgent:
 
         return instance
 
+    def _build_middleware(self) -> list:
+        """Build middleware list based on configuration.
+
+        Returns:
+            List of middleware instances to pass to create_agent
+        """
+        middleware = []
+
+        # 1. Summarization Middleware
+        if self.config.enable_summarization:
+            summarization_model = self.config.summarization_model or self.provider_name
+            self.logger.info(
+                f"Enabling SummarizationMiddleware (trigger={self.config.summarization_trigger_tokens} tokens, "
+                f"keep={self.config.summarization_keep_messages} messages, model={summarization_model})"
+            )
+            middleware.append(
+                SummarizationMiddleware(
+                    model=summarization_model,
+                    trigger=("tokens", self.config.summarization_trigger_tokens),
+                    keep=("messages", self.config.summarization_keep_messages),
+                )
+            )
+
+        # 2. To-do List Middleware
+        if self.config.enable_todo_list:
+            self.logger.info("Enabling TodoListMiddleware for task planning")
+            middleware.append(TodoListMiddleware())
+
+        # 3. LLM Tool Selector Middleware
+        if self.config.enable_llm_tool_selector:
+            tool_selector_model = self.config.tool_selector_model or self.provider_name
+            always_include = []
+            if self.config.tool_selector_always_include:
+                always_include = [
+                    tool.strip()
+                    for tool in self.config.tool_selector_always_include.split(",")
+                ]
+            self.logger.info(
+                f"Enabling LLMToolSelectorMiddleware (max_tools={self.config.tool_selector_max_tools}, "
+                f"model={tool_selector_model}, always_include={always_include})"
+            )
+            middleware.append(
+                LLMToolSelectorMiddleware(
+                    model=tool_selector_model,
+                    max_tools=self.config.tool_selector_max_tools,
+                    always_include=always_include,
+                )
+            )
+
+        # 4. Tool Retry Middleware
+        if self.config.enable_tool_retry:
+            self.logger.info(
+                f"Enabling ToolRetryMiddleware (max_retries={self.config.tool_retry_max_retries}, "
+                f"backoff={self.config.tool_retry_backoff_factor}, "
+                f"initial_delay={self.config.tool_retry_initial_delay}s)"
+            )
+            middleware.append(
+                ToolRetryMiddleware(
+                    max_retries=self.config.tool_retry_max_retries,
+                    backoff_factor=self.config.tool_retry_backoff_factor,
+                    initial_delay=self.config.tool_retry_initial_delay,
+                )
+            )
+
+        # 5. Context Editing Middleware
+        if self.config.enable_context_editing:
+            self.logger.info(
+                f"Enabling ContextEditingMiddleware (trigger={self.config.context_edit_trigger_tokens} tokens, "
+                f"keep={self.config.context_edit_keep_tool_uses} tool uses)"
+            )
+            middleware.append(
+                ContextEditingMiddleware(
+                    edits=[
+                        ClearToolUsesEdit(
+                            trigger=self.config.context_edit_trigger_tokens,
+                            keep=self.config.context_edit_keep_tool_uses,
+                        ),
+                    ],
+                )
+            )
+
+        # 6. Shell Tool Middleware
+        if self.config.enable_shell_tool:
+            workspace_root = self.config.shell_workspace_root or os.getcwd()
+            self.logger.info(
+                f"Enabling ShellToolMiddleware (workspace_root={workspace_root})"
+            )
+            middleware.append(
+                ShellToolMiddleware(
+                    workspace_root=workspace_root,
+                    execution_policy=HostExecutionPolicy(),
+                )
+            )
+
+        # 7. File Search Middleware
+        if self.config.enable_file_search:
+            search_root = self.config.file_search_root_path or os.getcwd()
+            self.logger.info(
+                f"Enabling FilesystemFileSearchMiddleware (root={search_root}, "
+                f"ripgrep={self.config.file_search_use_ripgrep})"
+            )
+            middleware.append(
+                FilesystemFileSearchMiddleware(
+                    root_path=os.path.expanduser(search_root),
+                    use_ripgrep=self.config.file_search_use_ripgrep,
+                )
+            )
+
+        return middleware
+
     def __init__(self, **kwargs: Any):
         """Initialize agent using langchain's create_agent.
 
@@ -86,6 +205,9 @@ class BaseAgent:
             if hasattr(wrapped, "bind_tools"):
                 model = wrapped
 
+        # Build middleware list based on configuration
+        middleware = self._build_middleware()
+
         # Build create_agent parameters
         agent_params = {
             "model": model,
@@ -93,6 +215,11 @@ class BaseAgent:
             "system_prompt": self.prompt,
             "name": self.name,
         }
+
+        # Add middleware if any are enabled
+        if middleware:
+            agent_params["middleware"] = middleware
+            self.logger.info(f"Enabled {len(middleware)} middleware components")
 
         # Add token truncation middleware if max_tokens configured
         if self.config.max_tokens:
@@ -227,11 +354,11 @@ class BaseAgent:
             if messages:
                 # Get the last message's content
                 last_message = messages[-1]
-                
+
                 # Prefer .text when available (avoids Gemini extras/signature)
                 if hasattr(last_message, "text") and isinstance(last_message.text, str):
                     return last_message.text
-                
+
                 if hasattr(last_message, "content"):
                     content = last_message.content
                     # If content is already a string, return it
