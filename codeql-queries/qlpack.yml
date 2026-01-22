@@ -1,0 +1,4 @@
+name: teastore/microservice-analysis
+version: 0.0.1
+libraryPathDependencies:
+  - codeql/java-all

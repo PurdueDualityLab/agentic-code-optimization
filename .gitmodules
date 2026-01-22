@@ -3,4 +3,4 @@
 	url = git@github.com:delimitrou/DeathStarBench.git
 [submodule "TeaStore"]
 	path = TeaStore
-	url = git@github.com:DescartesResearch/TeaStore.git
+	url = git@github.com:PurdueDualityLab/TeaStore.git

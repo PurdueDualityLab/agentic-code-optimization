@@ -1,0 +1,12 @@
+- description: TeaStore Component Analysis Suite
+- queries: .
+- include:
+    id:
+      - teastore/find-microservices-simple
+      - teastore/find-all-endpoints
+      - teastore/component-inventory
+      - teastore/hierarchical-composition
+      - teastore/exported-http-endpoints
+      - teastore/exported-public-api
+      - teastore/deps-call-based
+      - teastore/deps-resource-based

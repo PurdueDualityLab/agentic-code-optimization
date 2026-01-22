@@ -221,7 +221,7 @@ where
       relType = "inheritance"
     )
   )
-select child, "kind=hierarchical_composition|service=" + serviceName + 
+select child, "kind=hierarchical_composition|service=" + serviceName +
   "|relation=" + relType +
   "|parent=" + parentFqn +
   "|child=" + childFqn
@@ -290,7 +290,7 @@ where
   isEntryPointClass(m.getDeclaringType()) and
   serviceName = getMicroserviceFromPackage(m.getDeclaringType().getPackage()) and
   m.fromSource()
-select m, "kind=exported_public_api|service=" + serviceName + 
+select m, "kind=exported_public_api|service=" + serviceName +
   "|class=" + m.getDeclaringType().getQualifiedName() +
   "|method=" + m.getName() +
   "|signature=" + m.getStringSignature()
@@ -324,9 +324,9 @@ where
     toService = getMicroserviceFromPackage(toClass.getPackage()) and
     fromClass != toClass  // Exclude self-calls
   )
-select fromClass, "kind=call_dependency|from_service=" + fromService + 
+select fromClass, "kind=call_dependency|from_service=" + fromService +
   "|from_class=" + fromClass.getQualifiedName() +
-  "|to_service=" + toService + 
+  "|to_service=" + toService +
   "|to_class=" + toClass.getQualifiedName()
 """
 
@@ -354,7 +354,7 @@ where
   c = s.getEnclosingCallable().getDeclaringType() and
   c.fromSource() and
   serviceName = getMicroserviceFromPackage(c.getPackage())
-select s, "kind=deps_resource_based|service=" + serviceName + 
+select s, "kind=deps_resource_based|service=" + serviceName +
   "|class=" + c.getQualifiedName() +
   "|value=" + s.getValue()
 """
@@ -388,7 +388,7 @@ where
     toService = getMicroserviceFromPackage(calleeClass.getPackage()) and
     callerClass != calleeClass
   )
-select callerClass, "kind=call_graph_edge|from_service=" + fromService + 
+select callerClass, "kind=call_graph_edge|from_service=" + fromService +
   "|caller=" + callerClass.getQualifiedName() +
   "|to_service=" + toService +
   "|callee=" + calleeClass.getQualifiedName()
@@ -433,7 +433,7 @@ where
   whileCount = count(WhileStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
   switchCount = count(SwitchStmt s | s.getEnclosingCallable().getDeclaringType() = c) and
   (ifCount > 0 or forCount > 0 or whileCount > 0 or switchCount > 0)
-select c, "kind=control_flow_structure|service=" + serviceName + 
+select c, "kind=control_flow_structure|service=" + serviceName +
   "|class=" + c.getQualifiedName() +
   "|if_count=" + ifCount +
   "|for_count=" + forCount +
@@ -487,7 +487,7 @@ where
       (not isDbPackage(targetPkg) and interactionType = "external_call")
     )
   )
-select c, "kind=interaction_site|service=" + serviceName + 
+select c, "kind=interaction_site|service=" + serviceName +
   "|class=" + c.getQualifiedName() +
   "|type=" + interactionType +
   "|target_package=" + targetPackage
@@ -516,7 +516,7 @@ where
   m.isSynchronized() and
   m.fromSource() and
   serviceName = getMicroserviceFromPackage(m.getDeclaringType().getPackage())
-select m, "kind=synchronization_construct|service=" + serviceName + 
+select m, "kind=synchronization_construct|service=" + serviceName +
   "|type=method|class=" + m.getDeclaringType().getQualifiedName() +
   "|method=" + m.getName()
 """
@@ -601,7 +601,7 @@ def _run_codeql_analysis(repo_path: Path, tool_name: str, queries_dir_name: str)
         "-e",
         "LANGUAGE=java",
         "-e",
-        "COMMAND=mvn clean compile -DskipTests -pl !utilities/tools.descartes.teastore.docker.all",
+        "COMMAND=mvn clean compile -DskipTests -Dmaven.repo.local=/opt/src/build-local",
         "-e",
         f"QS=/opt/src/{queries_dir_name}/teastore-analysis.qls",
         "codeql-agent",
@@ -688,7 +688,7 @@ def _parse_sarif_for_rule(sarif_path: Path, rule_id: str) -> list[dict[str, str]
 
 def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[dict[str, str]]]:
     """Parse SARIF results for multiple rules and return grouped by rule ID with deduplication.
-    
+
     OPTIMIZATION: Deduplicates results to reduce output size while preserving all unique
     architectural information.
     """
@@ -699,7 +699,7 @@ def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[
 
     # Initialize results dict for all rule IDs
     results_by_rule: dict[str, list[dict[str, str]]] = {rule_id: [] for rule_id in rule_ids}
-    
+
     # Track seen items to deduplicate (exclude file/line metadata for dedup key)
     seen_by_rule: dict[str, set[str]] = {rule_id: set() for rule_id in rule_ids}
 
@@ -712,9 +712,9 @@ def _parse_sarif_multi(sarif_path: Path, rule_ids: list[str]) -> dict[str, list[
             parsed = _parse_kv_message(message_text)
             if parsed:
                 # Create dedup key (exclude file/line info if present)
-                dedup_key = "|".join(f"{k}={v}" for k, v in sorted(parsed.items()) 
+                dedup_key = "|".join(f"{k}={v}" for k, v in sorted(parsed.items())
                                     if k not in ['file', 'start_line', 'end_line'])
-                
+
                 if dedup_key not in seen_by_rule[rule_id]:
                     seen_by_rule[rule_id].add(dedup_key)
                     results_by_rule[rule_id].append(parsed)
@@ -788,7 +788,7 @@ def _run_multi_query_tool(
 
         logger.info(f"TeaStore CodeQL analysis completed successfully for {tool_name}")
         logger.info(f"Total unique findings: {total_findings}")
-        
+
         return json.dumps(
             {
                 "success": True,
