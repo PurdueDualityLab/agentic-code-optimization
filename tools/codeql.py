@@ -8,6 +8,7 @@ import json
 import logging
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -565,8 +566,108 @@ def _create_query_files_multi(
     logger.info(f"Created {len(queries)} CodeQL query files in {queries_dir} for {tool_name}")
 
 
+def _acquire_build_lock(repo_path: Path, timeout: int = 600, poll_interval: int = 5) -> Path:
+    """Acquire a file-based lock for Maven build to prevent concurrent builds.
+
+    Args:
+        repo_path: Path to the repository
+        timeout: Maximum time to wait for lock in seconds (default: 600 = 10 minutes)
+        poll_interval: How often to check for lock availability in seconds (default: 5)
+
+    Returns:
+        Path to the lock file
+
+    Raises:
+        TimeoutError: If lock cannot be acquired within timeout period
+    """
+    lock_file = repo_path / ".codeql-build.lock"
+    start_time = time.time()
+    waited = False
+
+    while True:
+        try:
+            # Try to create the lock file exclusively (fails if it already exists)
+            lock_file.touch(exist_ok=False)
+
+            # Write lock info (PID, timestamp, etc.)
+            import os
+            lock_info = {
+                "pid": os.getpid(),
+                "timestamp": time.time(),
+                "hostname": subprocess.run(
+                    ["hostname"], capture_output=True, text=True, timeout=5
+                ).stdout.strip() if subprocess.run(
+                    ["which", "hostname"], capture_output=True
+                ).returncode == 0 else "unknown"
+            }
+            lock_file.write_text(json.dumps(lock_info, indent=2))
+
+            if waited:
+                logger.info(f"Lock acquired after waiting {time.time() - start_time:.1f}s")
+            else:
+                logger.debug(f"Lock acquired: {lock_file}")
+
+            return lock_file
+
+        except FileExistsError:
+            # Lock file exists, another instance is building
+            elapsed = time.time() - start_time
+
+            if not waited:
+                # First time waiting, read lock info
+                try:
+                    lock_info = json.loads(lock_file.read_text())
+                    logger.info(
+                        f"Build lock held by PID {lock_info.get('pid')} on {lock_info.get('hostname')}. "
+                        f"Waiting for lock to be released..."
+                    )
+                except Exception:
+                    logger.info(f"Build lock exists at {lock_file}. Waiting for release...")
+                waited = True
+
+            if elapsed > timeout:
+                # Check if lock is stale (older than timeout)
+                try:
+                    lock_info = json.loads(lock_file.read_text())
+                    lock_age = time.time() - lock_info.get("timestamp", time.time())
+                    if lock_age > timeout:
+                        logger.warning(
+                            f"Stale lock detected (age: {lock_age:.1f}s). Removing and retrying..."
+                        )
+                        lock_file.unlink(missing_ok=True)
+                        continue
+                except Exception:
+                    pass
+
+                raise TimeoutError(
+                    f"Could not acquire build lock after {timeout}s. "
+                    f"Another instance may be running. Lock file: {lock_file}"
+                )
+
+            # Wait before retrying
+            time.sleep(poll_interval)
+
+
+def _release_build_lock(lock_file: Path) -> None:
+    """Release the build lock file.
+
+    Args:
+        lock_file: Path to the lock file to release
+    """
+    try:
+        if lock_file.exists():
+            lock_file.unlink()
+            logger.debug(f"Lock released: {lock_file}")
+    except Exception as e:
+        logger.warning(f"Failed to release lock file {lock_file}: {e}")
+
+
 def _run_codeql_analysis(repo_path: Path, tool_name: str, queries_dir_name: str) -> Path:
-    """Run CodeQL analysis using Docker container.
+    """Run CodeQL analysis using Docker container with file-based locking.
+
+    This function uses a file-based lock to prevent concurrent Maven builds in the same
+    repository, which would cause conflicts. The lock is held for the duration of the
+    Docker/Maven build and automatically released when complete.
 
     Args:
         repo_path: Path to the TeaStore repository
@@ -578,76 +679,85 @@ def _run_codeql_analysis(repo_path: Path, tool_name: str, queries_dir_name: str)
 
     Raises:
         RuntimeError: If Docker command fails
+        TimeoutError: If build lock cannot be acquired
     """
     logger.info(f"Running CodeQL analysis via Docker for {tool_name}...")
 
-    # Use unique container name based on tool
-    container_name = f"codeql-{tool_name.replace('_', '-')}"
-
-    # Use tool-specific results directory
-    results_dir_name = f"codeql-agent-results-{tool_name}"
-
-    # Docker command from run-analysis.sh
-    docker_cmd = [
-        "docker",
-        "run",
-        "--rm",
-        "--name",
-        container_name,
-        "-v",
-        f"{repo_path}:/opt/src",
-        "-v",
-        f"{repo_path}/{results_dir_name}:/opt/results",
-        "-e",
-        "LANGUAGE=java",
-        "-e",
-        "COMMAND=mvn clean compile -DskipTests -Dmaven.repo.local=/opt/src/build-local",
-        "-e",
-        f"QS=/opt/src/{queries_dir_name}/teastore-analysis.qls",
-        "codeql-agent",
-    ]
+    # Acquire build lock to prevent concurrent Maven builds
+    lock_file = _acquire_build_lock(repo_path)
 
     try:
-        # Use Popen to stream output in real-time
-        process = subprocess.Popen(
-            docker_cmd,
-            cwd=repo_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # Merge stderr into stdout
-            text=True,
-            bufsize=1,  # Line buffered
-        )
+        # Use unique container name based on tool
+        container_name = f"codeql-{tool_name.replace('_', '-')}"
 
-        # Stream output line by line
-        output_lines = []
-        if process.stdout:
-            for line in process.stdout:
-                line = line.rstrip()
-                print(line)  # Stream to stdout
-                output_lines.append(line)
-                logger.debug(f"Docker: {line}")
+        # Use tool-specific results directory
+        results_dir_name = f"codeql-agent-results-{tool_name}"
 
-        # Wait for process to complete
-        return_code = process.wait()
+        # Docker command from run-analysis.sh
+        docker_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--name",
+            container_name,
+            "-v",
+            f"{repo_path}:/opt/src",
+            "-v",
+            f"{repo_path}/{results_dir_name}:/opt/results",
+            "-e",
+            "LANGUAGE=java",
+            "-e",
+            "COMMAND=mvn clean compile -DskipTests -Dmaven.repo.local=/opt/src/build-local",
+            "-e",
+            f"QS=/opt/src/{queries_dir_name}/teastore-analysis.qls",
+            "codeql-agent",
+        ]
 
-        if return_code != 0:
-            error_output = "\n".join(output_lines[-20:])  # Last 20 lines
-            raise RuntimeError(f"CodeQL analysis failed with exit code {return_code}:\n{error_output}")
+        try:
+            # Use Popen to stream output in real-time
+            process = subprocess.Popen(
+                docker_cmd,
+                cwd=repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                text=True,
+                bufsize=1,  # Line buffered
+            )
 
-        logger.info(f"CodeQL analysis completed successfully for {tool_name}")
+            # Stream output line by line
+            output_lines = []
+            if process.stdout:
+                for line in process.stdout:
+                    line = line.rstrip()
+                    print(line)  # Stream to stdout
+                    output_lines.append(line)
+                    logger.debug(f"Docker: {line}")
 
-        sarif_path = repo_path / results_dir_name / "issues.sarif"
-        if not sarif_path.exists():
-            raise RuntimeError(f"SARIF results file not found at {sarif_path}")
+            # Wait for process to complete
+            return_code = process.wait()
 
-        return sarif_path
+            if return_code != 0:
+                error_output = "\n".join(output_lines[-20:])  # Last 20 lines
+                raise RuntimeError(f"CodeQL analysis failed with exit code {return_code}:\n{error_output}")
 
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Docker command failed: {e.stderr}")
-        raise RuntimeError(f"CodeQL analysis failed: {e.stderr}")
-    except Exception as e:
-        logger.error(f"Unexpected error during CodeQL analysis: {e}")
-        raise RuntimeError(f"CodeQL analysis failed: {str(e)}")
+            logger.info(f"CodeQL analysis completed successfully for {tool_name}")
+
+            sarif_path = repo_path / results_dir_name / "issues.sarif"
+            if not sarif_path.exists():
+                raise RuntimeError(f"SARIF results file not found at {sarif_path}")
+
+            return sarif_path
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Docker command failed: {e.stderr}")
+            raise RuntimeError(f"CodeQL analysis failed: {e.stderr}")
+        except Exception as e:
+            logger.error(f"Unexpected error during CodeQL analysis: {e}")
+            raise RuntimeError(f"CodeQL analysis failed: {str(e)}")
+
+    finally:
+        # Always release the lock, even if analysis fails
+        _release_build_lock(lock_file)
 
 
 def _parse_kv_message(text: str) -> dict[str, str]:

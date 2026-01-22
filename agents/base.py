@@ -272,7 +272,12 @@ class BaseAgent:
             tool_input: Input arguments to the tool
             tool_output: Output from the tool
         """
-        self.logger.log(TOOL_CALL, f"Input: {json.dumps(tool_input, indent=2)[:300]}")
+        # Safely serialize tool input (may contain non-JSON-serializable middleware tools)
+        try:
+            tool_input_str = json.dumps(tool_input, indent=2)[:300]
+        except (TypeError, ValueError):
+            tool_input_str = str(tool_input)[:300]
+        self.logger.log(TOOL_CALL, f"Input: {tool_input_str}")
 
         # Truncate long output
         output_str = str(tool_output)
@@ -334,7 +339,12 @@ class BaseAgent:
                 tool_name = name
                 tool_input = data.get("input", {})
                 self.logger.info(f"Tool execution started: {tool_name}")
-                self.logger.log(TOOL_CALL, f"Tool input: {json.dumps(tool_input, indent=2)[:300]}")
+                # Safely serialize tool input (may contain non-JSON-serializable middleware tools)
+                try:
+                    tool_input_str = json.dumps(tool_input, indent=2)[:300]
+                except (TypeError, ValueError):
+                    tool_input_str = str(tool_input)[:300]
+                self.logger.log(TOOL_CALL, f"Tool input: {tool_input_str}")
 
             elif kind == "on_tool_end":
                 tool_name = name
