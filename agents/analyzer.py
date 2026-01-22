@@ -91,10 +91,13 @@ Input is JSON with:
 - root_path: repository root to use for analysis and snippet/search tools
 
 ## Analysis Approach
-1) Understand system context from the summaries (architecture, services, dependencies, infra), which include static signals.
-2) Review embedded static signals (coverage, hotspots, client usage, dependencies, database calls, call graph cues).
-3) Identify optimization opportunities with clear evidence and expected impact.
-4) Prioritize by impact and confidence; note assumptions and gaps.
+IMPORTANT: First build a comprehensive analysis plan before executing any optimizations.
+
+1) Start by reading the summary report and identifying key components, architecture patterns, and system boundaries.
+2) Understand system context from the summaries (architecture, services, dependencies, infra), which include static signals.
+3) Review embedded static signals (coverage, hotspots, client usage, dependencies, database calls, call graph cues).
+4) Identify optimization opportunities with clear evidence and expected impact.
+5) Prioritize by impact and confidence; note assumptions and gaps.
 
 ## Tool Usage Strategy
 - Call build_analysis_bundle(summary_source, max_items=12) to normalize the summaries.
@@ -125,8 +128,8 @@ Input is JSON with:
 
     structured_output_type = AnalysisReport
     return_state_field = "analysis_report"
-    temperature = 0.7
-    max_iterations = 10
+    # temperature = 0.7
+    # max_iterations = 10
 
     tools = [
         build_analysis_bundle,

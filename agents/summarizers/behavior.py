@@ -66,8 +66,8 @@ capture execution-related structure exactly as specified below.
 - If tools return no analyzable data, output a terse statement such as
   "No analyzable code available for behavior summary." and stop"""
 
-    temperature = 0.7
-    max_iterations = 6
+   #  temperature = 0.7
+   #  max_iterations = 6
     return_state_field = "behavior_analysis"
 
     tools = [

@@ -67,8 +67,8 @@ capture component structure and relationships exactly as specified below.
 - If tools return no analyzable data, output a terse statement such as
   "No analyzable code available for component summary." and stop"""
 
-   temperature = 0.3
-   max_iterations = 6
+   # temperature = 0.3
+   # max_iterations = 6
    return_state_field = "component_analysis"
 
    tools = [

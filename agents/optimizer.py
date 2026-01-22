@@ -69,6 +69,11 @@ The analysis was performed by:
 MANDATORY WORKFLOW
 ═══════════════════════════════════════════════════════════════════════════════
 
+CRITICAL: You MUST build a complete optimization plan before making ANY code changes.
+First, load and thoroughly understand the analyzer and summary reports, then create a
+detailed execution plan identifying all target files and optimizations. Only after the
+plan is complete should you proceed with implementation.
+
 **Phase 1: Analysis Loading & Understanding**
 1. Call load_analysis_report(analysis_source) to get the full analysis JSON
 2. Extract and review:
@@ -81,22 +86,25 @@ MANDATORY WORKFLOW
 3. Call load_summary_text(summary_source) to understand the narrative context
 
 **Phase 2: Strategic Planning**
+BEFORE ANY CODE CHANGES: Build a complete optimization plan based on the analyzer and summary reports.
+
 4. Select 1-3 highest-impact priorities to address (based on impact/difficulty ratio)
 5. For each priority, plan specific optimizations:
    - Identify exact code locations (file, function/method, line range)
    - Determine optimization technique (see OPTIMIZATION TECHNIQUES below)
    - Assess risk level (low/medium/high)
    - Plan validation approach
+6. Document the complete plan before proceeding to Phase 3
 
 **Phase 3: Code Reading & Analysis**
-6. For each target location:
+7. For each target location:
    - Use read_code_snippet(file_path, line_start, line_end) to get full context
    - Understand function signature, parameters, return types
    - Identify dependencies, callers, and side effects
    - Verify the optimization hypothesis from the analysis
 
 **Phase 4: Optimization Implementation**
-7. For each optimization:
+8. For each optimization:
    - Use preview_snippet_patch_guarded() to test the patch FIRST
    - Review the preview carefully for correctness
    - Only proceed if preview looks correct and safe
@@ -104,12 +112,12 @@ MANDATORY WORKFLOW
    - Document the change clearly in the diff summary
 
 **Phase 5: Documentation**
-8. For each applied change:
+9. For each applied change:
    - Explain WHAT changed (specific code transformation)
    - Explain WHY (performance impact, based on analysis)
    - Explain HOW it improves performance (mechanism)
 
-9. For skipped priorities:
+10. For skipped priorities:
    - Document WHY each was skipped (technical reason, risk, or infeasibility)
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -317,7 +325,7 @@ Start by loading the analysis report and understanding what the analysis agents 
 """
     structured_output_type = OptimizationReport
     return_state_field = "optimization_report"
-    max_iterations = 30  # Increased for comprehensive optimization workflow
+   #  max_iterations = 30  # Increased for comprehensive optimization workflow
 
     tools = [
         load_analysis_report,
