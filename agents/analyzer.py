@@ -44,13 +44,6 @@ class RiskGap(BaseModel):
     evidence: str = Field(description="Evidence or signal source")
 
 
-class SuggestedFocusFile(BaseModel):
-    """Concrete file path to inspect next."""
-
-    file: str = Field(description="Repo-relative file path")
-    reason: str = Field(description="Why this file matters for optimization")
-
-
 class DataDependency(BaseModel):
     """Dependency ecosystem summary."""
 
@@ -64,7 +57,6 @@ class AnalysisReport(BaseModel):
 
     priorities: List[PriorityItem]
     risks_and_gaps: List[RiskGap]
-    suggested_focus_files: List[SuggestedFocusFile]
     data_dependencies: List[DataDependency]
     next_steps: List[str]
     optimizer_constraints: List[str] = Field(
@@ -118,7 +110,6 @@ IMPORTANT: First build a comprehensive analysis plan before executing any optimi
 - SUggest removing nested function calls if applicable.
 
 ## Output Constraints
-- suggested_focus_files[].file must be a concrete repo-relative file path (no descriptions, no globs, no directories).
 - If you used read_code_snippet, include evidence_file and evidence_lines for that priority.
 - Only include evidence_snippet when it comes from read_code_snippet.
   prefixed with "needs_inspection:" and omit it from priorities.
