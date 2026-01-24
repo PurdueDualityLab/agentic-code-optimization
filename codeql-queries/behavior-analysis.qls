@@ -1,0 +1,8 @@
+- description: TeaStore Behavior Analysis Suite
+- queries: .
+- include:
+    id:
+      - teastore/rooted-call-graph-depth5
+      - teastore/control-flow-structure
+      - teastore/interaction-sites
+      - teastore/synchronization-constructs

@@ -1,0 +1,612 @@
+code_path: /Users/parth/agentic-code-optimization/TeaStore
+iteration_count: 2
+summary_text: |
+  ENVIRONMENT SUMMARY:
+  ## summary
+  TeaStore is a Java/Jakarta EE microservice benchmark application (multi-module Maven) that implements an online store (web UI + auth + registry + persistence + recommender + image service). It targets general-purpose CPU/server deployments (typical x86-64/ARM64 JVMs) and is primarily throughput/latency oriented around web request handling rather than numeric/HPC compute. Parallelism is largely implicit via the application server/JVM thread-per-request model, not explicit SIMD/GPU/HPC constructs.
+
+  ## primary_languages
+  - **Java** (dominant; multi-module Maven)
+  - Minor: config/XML (Maven POMs), test/config scripts (not performance-critical)
+
+  ## project_type
+  - **general_compute** (web/microservices benchmark; not HPC/ML)
+
+  ## frameworks
+  - **Maven** multi-module build
+  - **Jakarta EE / Servlet stack** (e.g., `jakarta.jakartaee-api`, `@WebServlet` in WebUI)
+  - **Kieker** probes (instrumentation/monitoring; seen as module `kieker.probes`)
+  - Mentions/modules for **RabbitMQ** integration (`kieker.rabbitmq`) and service discovery/registry client
+
+  ## target_architectures
+  - **CPU servers running the JVM** (portable across x86-64 and ARM64)
+  - Packaged as **WAR** for deployment on servlet containers / app servers (e.g., Tomcat/Jetty/Payara/etc.; exact runtime depends on deployment, but the code is Jakarta EE style)
+  - No evidence of GPU/FPGA/SIMD-specific targeting in scanned sources
+
+  ## cpu_profile
+  - **No explicit SIMD/vector intrinsics** detected (no SSE/AVX, no JNI compute kernels)
+  - **No explicit OpenMP/MPI/CUDA** patterns detected
+  - Concurrency is expected to come from:
+    - **Servlet container thread pools** (request handling)
+    - Potential internal Java concurrency (not found in quick grep for `ExecutorService/ForkJoinPool/CompletableFuture`, but may exist deeper)
+
+  ## memory_profile
+  - Typical **web-service allocation patterns**:
+    - Per-request object creation (DTOs/entities, request/response objects)
+    - Session/cart/user state in memory or via persistence layer
+  - Likely **cache-unfriendly vs numeric codes**: many small objects, pointer chasing, GC-sensitive
+  - Working sets depend on catalog/user/session sizes; performance often **GC/heap and DB/network bound** rather than FLOP-bound
+
+  ## parallelization_model
+  - **shared_memory** (within a JVM) via container-managed threading
+  - **distributed** at the system level via multiple services/modules
+  - Overall: **hybrid distributed microservices + shared-memory threading per service**, but not explicit parallel algorithms
+
+  ## simd_capabilities
+  - **None detected / not explicitly used**
+  - Any SIMD is left to **HotSpot JIT auto-vectorization** (if applicable), not coded intentionally
+
+  ## data_characteristics
+  - **Request-driven**, coarse-grained tasks (HTTP requests)
+  - Mostly **irregular access** (maps, lists, DB results, JSON/XML/HTML, templates)
+  - Not stencil/linear algebra; minimal data-parallel kernels
+
+  ## performance_optimization_targets
+  - **Throughput (requests/sec)** and **tail latency**
+  - **GC pressure** / allocation rate
+  - **I/O latency** (DB, inter-service calls, messaging)
+  - **Thread pool sizing / contention** (locks, shared caches, session stores)
+
+  ## computational_characteristics
+  - Predominantly **I/O and coordination heavy** (web requests, persistence, service-to-service communication)
+  - Moderate CPU usage in:
+    - serialization/deserialization
+    - templating/rendering (WebUI)
+    - recommendation logic (algorithm-dependent, but still typically not SIMD/GPU)
+
+  ## notable_features
+  - Multi-service modular architecture (webui/auth/registry/persistence/recommender/image)
+  - **Servlet-based WebUI** confirmed (e.g., `@WebServlet("/index")`, `@WebServlet("/cart")`)
+  - **Instrumentation hooks** (Kieker) suggest benchmarking/observability is a core concern
+  - Maven compiler level set to **Java 11** in at least the WebUI module
+
+  If you want, I can drill into each service (recommender/persistence/auth) to identify the hottest code paths and where contention/allocations are likely, but that requires scanning those specific module sources in more detail.
+
+  COMPONENT SUMMARY:
+  ## 1) Component inventory (static structure, significant components)
+
+  ### Microservices (by detected endpoint/root components)
+  - **auth**: `tools.descartes.teastore.auth.rest.AuthCartRest`, `...ReadyRest`, `...AuthUserActionsRest` (Evidence: CodeQL `teastore/find-microservices-simple`)
+  - **image**: `tools.descartes.teastore.image.rest.ImageProviderEndpoint` (Evidence: `teastore/find-microservices-simple`)
+  - **kieker**: `tools.descartes.teastore.kieker.rabbitmq.IndexServlet` (Evidence: `teastore/find-microservices-simple`)
+  - **persistence**: REST endpoints + repositories: `...rest.{CacheManagerEndpoint,CategoryEndpoint,DatabaseGenerationEndpoint,OrderEndpoint,OrderItemEndpoint,UserEndpoint,ProductEndpoint}`, servlet `...servlet.IndexServlet`, domain/repo `...domain.{CategoryRepository,OrderRepository,OrderItemRepository,ProductRepository,UserRepository}`, infra `...repository.{AbstractPersistenceRepository,CacheManager,DatabaseManagementEntity,EMFManager}` (Evidence: `teastore/component-inventory`, `teastore/find-microservices-simple`)
+  - **recommender**: REST endpoints `...rest.{RecommendSingleEndpoint,RecommendEndpoint,TrainEndpoint}`, servlet `...servlet.IndexServlet`, plus startup/daemons surfaced via exported API/calls: `...servlet.{RecommenderStartup,RetrainDaemon,TrainingSynchronizer}` (Evidence: `teastore/find-microservices-simple`, `teastore/exported-public-api`, `teastore/deps-call-based`)
+  - **registry**: `tools.descartes.teastore.registry.rest.{RegistryREST,RegistryStartup,Registry,HeartbeatInfo}`, servlet `...servlet.IndexServlet` (Evidence: `teastore/find-microservices-simple`, `teastore/exported-http-endpoints`)
+  - **registryclient** (shared client/lib): `...util.AbstractCRUDEndpoint`, `...Service`, REST/client helpers `...rest.{HttpWrapper,RestUtil,TrackingFilter,ResponseWrapper,CharResponseWrapper,LoadBalanced*Operations,NonBalancedCRUDOperations}` and load balancer/client classes referenced in deps (Evidence: `teastore/component-inventory`, `teastore/exported-http-endpoints`, `teastore/deps-call-based`)
+  - **webui**: REST readiness `...rest.ReadyRest`, UI servlets `...servlet.{AbstractUIServlet,IndexServlet,CategoryServlet,ProductServlet,CartServlet,CartActionServlet,LoginServlet,LoginActionServlet,OrderServlet,ProfileServlet,StatusServlet,AboutUsServlet,DataBaseServlet,DataBaseActionServlet,ErrorServlet}` (Evidence: `teastore/component-inventory`, `teastore/find-all-endpoints`)
+
+  ## 2) Hierarchical composition (parent → child)
+
+  ### Inheritance (selected key chains)
+  - `jakarta.servlet.http.HttpServlet` → `tools.descartes.teastore.webui.servlet.AbstractUIServlet` → (many UI servlets, e.g. `IndexServlet`, `ProductServlet`, etc.) (Evidence: `teastore/hierarchical-composition`)
+  - `tools.descartes.teastore.registryclient.util.AbstractCRUDEndpoint<T>` → persistence REST endpoints: `CategoryEndpoint`, `OrderEndpoint`, `OrderItemEndpoint`, `UserEndpoint`, `ProductEndpoint` (Evidence: `teastore/hierarchical-composition`)
+  - `tools.descartes.teastore.persistence.repository.AbstractPersistenceRepository<...>` → domain repositories: `CategoryRepository`, `OrderRepository`, `OrderItemRepository`, `ProductRepository`, `UserRepository` (Evidence: `teastore/hierarchical-composition`)
+  - `javax.servlet.http.HttpServlet` → `tools.descartes.teastore.kieker.rabbitmq.IndexServlet` (Evidence: `teastore/hierarchical-composition`)
+  - `jakarta.servlet.http.HttpServlet` → `tools.descartes.teastore.persistence.servlet.IndexServlet`, `tools.descartes.teastore.recommender.servlet.IndexServlet`, `tools.descartes.teastore.registry.servlet.IndexServlet` (Evidence: `teastore/hierarchical-composition`)
+
+  ## 3) Exported interfaces (externally visible entry points)
+
+  ### Exported HTTP endpoint classes (service API surface)
+  - **auth**: `AuthCartRest`, `AuthUserActionsRest`, `ReadyRest` (Evidence: `teastore/exported-http-endpoints`)
+  - **image**: `ImageProviderEndpoint`, `image.setup.SetupController` (Evidence: `teastore/exported-http-endpoints`)
+  - **persistence**: `CacheManagerEndpoint`, `CategoryEndpoint`, `DatabaseGenerationEndpoint`, `OrderEndpoint`, `OrderItemEndpoint`, `UserEndpoint`, `ProductEndpoint`, `persistence.servlet.IndexServlet` (Evidence: `teastore/exported-http-endpoints`)
+  - **recommender**: `RecommendSingleEndpoint`, `RecommendEndpoint`, `TrainEndpoint`, `recommender.servlet.IndexServlet` (Evidence: `teastore/exported-http-endpoints`)
+  - **registry**: `RegistryREST`, `RegistryStartup`, `Registry`, `HeartbeatInfo`, `registry.servlet.IndexServlet` (Evidence: `teastore/exported-http-endpoints`)
+  - **webui**: `webui.rest.ReadyRest` + all UI servlets listed above (Evidence: `teastore/exported-http-endpoints`)
+  - **kieker**: `kieker.rabbitmq.IndexServlet` (Evidence: `teastore/exported-http-endpoints`)
+
+  ### Exported public API methods (entry-point methods surfaced by analysis)
+  - **auth**
+    - `AuthCartRest.{addProductToCart, removeProductFromCart, updateQuantity}` (Evidence: `teastore/exported-public-api`)
+    - `AuthUserActionsRest.{login, logout, isLoggedIn, placeOrder}` (Evidence: `teastore/exported-public-api`)
+    - `ReadyRest.isReady()` (Evidence: `teastore/exported-public-api`)
+  - **persistence**
+    - `CacheManagerEndpoint.{clearAllCaches, clearClassCache, clearEMF}` (Evidence: `teastore/exported-public-api`)
+    - `DatabaseGenerationEndpoint.{generateDataBase, setMaintenanceMode, isMaintenance, isFinshed}` (Evidence: `teastore/exported-public-api`)
+    - `OrderEndpoint.listAllForUser`, `OrderItemEndpoint.{listAllForOrder, listAllForProduct}`, `ProductEndpoint.{listAllForCategory, countForCategory}`, `UserEndpoint.findById(String)` (Evidence: `teastore/exported-public-api`)
+  - **recommender**
+    - `RecommendEndpoint.recommend(List<OrderItem>, Long)`, `RecommendSingleEndpoint.recommend(OrderItem, Long)`
+    - `TrainEndpoint.{train, isReady, getTimeStamp}`
+    - Startup/daemon: `RecommenderStartup.{contextInitialized, contextDestroyed}`, `RetrainDaemon.run`, `TrainingSynchronizer` APIs (Evidence: `teastore/exported-public-api`)
+  - **registry**
+    - `RegistryREST.{register, unregister, getInstances}`, `Registry.{register, unregister, getLocations, heartBeatCleanup, getRegistryInstance}`, `HeartbeatInfo.{newHeartbeat,isAlive}`, `RegistryStartup.{contextInitialized,contextDestroyed}` (Evidence: `teastore/exported-public-api`)
+  - **registryclient**
+    - CRUD base: `AbstractCRUDEndpoint.{create, update, deleteById, findById, listAll}` (Evidence: `teastore/exported-public-api`)
+    - Client ops: `LoadBalancedCRUDOperations` / `LoadBalancedStoreOperations` / `LoadBalancedImageOperations` / `LoadBalancedRecommenderOperations` methods; `TrackingFilter.{init,doFilter,destroy}`; `RestUtil` read/throw helpers (Evidence: `teastore/exported-public-api`)
+
+  ## 4) Static dependency relations (aggregated)
+
+  ### Cross-service call-based dependencies (class-level)
+  - **auth → registryclient**
+    - `AuthCartRest` → `registryclient.rest.LoadBalancedCRUDOperations`
+    - `AuthUserActionsRest` → `registryclient.rest.LoadBalancedCRUDOperations` (Evidence: `teastore/deps-call-based`)
+  - **image → registryclient**
+    - `image.setup.SetupController` → `registryclient.loadbalancers.ServiceLoadBalancer`
+    - `image.setup.ImageProviderStartup` → `registryclient.tracing.Tracing` (Evidence: `teastore/deps-call-based`)
+  - **persistence → registryclient**
+    - `persistence.rest.DatabaseGenerationEndpoint` → `registryclient.RegistryClient`
+    - `persistence.repository.{CacheManager,DataGenerator}` → `registryclient.util.RESTClient<String>` (Evidence: `teastore/deps-call-based`)
+  - **recommender → registryclient**
+    - `RecommenderStartup` → `registryclient.tracing.Tracing`
+    - `RetrainDaemon` → `registryclient.RegistryClient`
+    - `TrainingSynchronizer` → `registryclient.rest.LoadBalancedCRUDOperations` (Evidence: `teastore/deps-call-based`)
+  - **webui → registryclient**
+    - `webui.servlet.AbstractUIServlet` → `registryclient.loadbalancers.LoadBalancerTimeoutException`
+    - `webui.startup.WebuiStartup` → `registryclient.tracing.Tracing` (Evidence: `teastore/deps-call-based`)
+  - **registry internal**
+    - `RegistryREST` → `Registry`
+    - `Registry` → `HeartbeatInfo` (Evidence: `teastore/deps-call-based`)
+
+  ### Intra-service call-based dependencies (examples surfaced)
+  - **persistence**: `AbstractPersistenceRepository` → `EMFManager`; persistence entity classes → `CacheManager` (Evidence: `teastore/deps-call-based`)
+  - **recommender**: REST endpoints → `RecommenderSelector`; `TrainEndpoint` → `TrainingSynchronizer`; algorithm implementations → base algorithm types (Evidence: `teastore/deps-call-based`)
+  - **image**: `ImageProviderEndpoint` → `SetupController`; cache strategies → `AbstractCache` base (Evidence: `teastore/deps-call-based`)
+
+  ### Resource-based dependencies (URLs / schemes)
+  - `registryclient.RegistryClient` uses `"http://localhost:"`
+  - `registryclient.util.RESTClient` uses `"http://"` and `"https://"` (Evidence: `teastore/deps-resource-based`)
+
+  ## 5) Component responsibilities (from structure + interfaces + deps)
+
+  - **webui**: Presentation/UI layer implemented as servlets (`AbstractUIServlet` base) + readiness REST; depends on **registryclient** for discovering/backending calls and tracing integration (Evidence: inheritance in `teastore/hierarchical-composition`; deps in `teastore/deps-call-based`; endpoints in `teastore/exported-http-endpoints`).
+  - **auth**: Authentication + session/cart/order actions exposed via REST (`AuthUserActionsRest`, `AuthCartRest`, `ReadyRest`); delegates persistence/store interactions through **registryclient** load-balanced CRUD operations (Evidence: `teastore/exported-public-api`; deps `auth.*` → `registryclient.rest.LoadBalancedCRUDOperations`).
+  - **persistence**: Data management service exposing CRUD-style REST endpoints (many extend `AbstractCRUDEndpoint`) plus DB generation/maintenance and cache management; implemented with repositories (`AbstractPersistenceRepository` + entity repositories) and EMF/cache infrastructure; calls **registryclient** for some REST client operations and registry access during generation/caching (Evidence: inventory + inheritance + exported APIs + deps).
+  - **recommender**: Recommendation/training service exposing recommendation endpoints and training control; includes startup lifecycle and retraining daemon/synchronizer; consumes entities like `OrderItem` and uses **registryclient** for data retrieval/tracing/registry interaction (Evidence: exported APIs; deps to `RegistryClient`, `LoadBalancedCRUDOperations`, `Tracing`).
+  - **image**: Image provisioning and setup/configuration endpoints; has internal cache/storage and image generation pipeline; uses **registryclient** load balancer/tracing to integrate into the service mesh (Evidence: endpoints + exported API + deps to `ServiceLoadBalancer`/`Tracing`).
+  - **registry**: Service discovery/registry with REST interface (`RegistryREST`) backed by `Registry` and `HeartbeatInfo` for liveness/cleanup (Evidence: exported APIs; internal deps `RegistryREST` → `Registry` and `Registry` → `HeartbeatInfo`).
+  - **registryclient**: Shared library providing (1) CRUD endpoint base class, (2) load-balanced REST operation wrappers, (3) registry client, load balancers, tracing hooks, servlet filter; also embeds URL/scheme handling (Evidence: exported public API; call deps among registryclient classes; resource-based deps).
+
+  ## 6) Evidence mapping (what is available from CodeQL output)
+  The provided CodeQL result set contains **component FQNs and relations**, but **does not include file paths/line ranges** for components or edges. Evidence is therefore mapped to the specific CodeQL result tables/entries:
+  - Component lists: `teastore/component-inventory`
+  - Microservice identification: `teastore/find-microservices-simple`
+  - Endpoint discovery: `teastore/find-all-endpoints`, `teastore/exported-http-endpoints`
+  - Inheritance/composition: `teastore/hierarchical-composition`
+  - Exported entry methods: `teastore/exported-public-api`
+  - Call dependencies: `teastore/deps-call-based`
+  - Resource dependencies: `teastore/deps-resource-based`
+
+  BEHAVIOR SUMMARY:
+  ## 1) Interprocedural call graphs (rooted, interprocedural edges)
+
+  ### WebUI entry surface (Servlet layer) → shared UI base → registryclient/tracing
+  - `webui.servlet.*Servlet` → `webui.servlet.AbstractUIServlet`
+    - Evidence: multiple edges, e.g.
+      - `tools.descartes.teastore.webui.servlet.CartActionServlet` → `tools.descartes.teastore.webui.servlet.AbstractUIServlet`
+      - `CategoryServlet` → `AbstractUIServlet`, `ProductServlet` → `AbstractUIServlet`, etc.
+      - (Aggregated edge list: `teastore/rooted-call-graph-depth5`)
+  - `webui.startup.WebuiStartup` → `registryclient.tracing.Tracing`
+    - Evidence: `tools.descartes.teastore.webui.startup.WebuiStartup` → `tools.descartes.teastore.registryclient.tracing.Tracing` (`teastore/rooted-call-graph-depth5`)
+
+  ### Auth service REST endpoints → load-balanced CRUD client (registryclient)
+  - `auth.rest.AuthUserActionsRest` → `registryclient.rest.LoadBalancedCRUDOperations`
+  - `auth.rest.AuthCartRest` → `registryclient.rest.LoadBalancedCRUDOperations`
+    - Evidence: both edges present (`teastore/rooted-call-graph-depth5`)
+  - Auth startup → tracing
+    - `auth.startup.AuthStartup` → `registryclient.tracing.Tracing`
+    - Evidence: edge present (`teastore/rooted-call-graph-depth5`)
+
+  ### Persistence REST endpoints → CRUD endpoint base / repositories / generator
+  - `persistence.rest.OrderEndpoint` → `registryclient.util.AbstractCRUDEndpoint<Order>`
+  - `persistence.rest.ProductEndpoint` → `registryclient.util.AbstractCRUDEndpoint<Product>`
+  - `persistence.rest.OrderItemEndpoint` → `registryclient.util.AbstractCRUDEndpoint<OrderItem>`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+  - `persistence.rest.CacheManagerEndpoint` → `persistence.repository.CacheManager`
+  - `persistence.rest.CategoryEndpoint` → `persistence.repository.DataGenerator`
+  - `persistence.rest.UserEndpoint` → `persistence.repository.DataGenerator`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+  - Repository stack:
+    - `persistence.domain.*Repository` → `persistence.repository.AbstractPersistenceRepository<...>`
+    - `persistence.repository.AbstractPersistenceRepository` → `persistence.repository.EMFManager`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+
+  ### Image service endpoints/startup/setup → load balancer + setup logic
+  - `image.rest.ImageProviderEndpoint` → `image.setup.SetupController`
+  - `image.setup.ImageProviderStartup` → `registryclient.tracing.Tracing`
+  - `image.setup.SetupController` → `registryclient.loadbalancers.ServiceLoadBalancer`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+
+  ### Recommender endpoints/startup/daemon → selector/synchronizer → registryclient CRUD
+  - `recommender.rest.RecommendEndpoint` → `recommender.algorithm.RecommenderSelector`
+  - `recommender.rest.RecommendSingleEndpoint` → `recommender.algorithm.RecommenderSelector`
+  - `recommender.rest.TrainEndpoint` → `recommender.servlet.TrainingSynchronizer`
+  - `recommender.servlet.TrainingSynchronizer` → `registryclient.rest.LoadBalancedCRUDOperations`
+  - `recommender.servlet.RecommenderStartup` → `registryclient.tracing.Tracing`
+  - `recommender.servlet.RetrainDaemon` → `registryclient.RegistryClient`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+
+  ### Registry & registryclient internal call structure
+  - `registry.rest.RegistryREST` → `registry.rest.Registry` → `registry.rest.HeartbeatInfo`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+  - Registry client core:
+    - `registryclient.RegistryClient` → `registryclient.Service`
+    - `registryclient.RegistryClientHeartbeatDaemon` → `registryclient.RegistryClient`
+    - `registryclient.rest.LoadBalancedCRUDOperations` → `registryclient.loadbalancers.ServiceLoadBalancer`
+    - `registryclient.rest.NonBalancedCRUDOperations` → `registryclient.util.RESTClient<T>`
+    - Evidence: edges present (`teastore/rooted-call-graph-depth5`)
+
+  ---
+
+  ## 2) Control-flow structure (branches/loops; static counts)
+
+  High-control-flow classes (notable branching/looping):
+  - `image.setup.SetupController`: **if=35, for=1, while=1, switch=3**
+    - Evidence: `teastore/control-flow-structure` entry for `tools.descartes.teastore.image.setup.SetupController`
+  - WebUI servlets:
+    - `webui.servlet.CartActionServlet`: **if=9, for=1**
+    - `webui.servlet.CategoryServlet`: **if=9, for=3**
+    - `webui.servlet.AbstractUIServlet`: **if=9**
+    - Evidence: `teastore/control-flow-structure` entries for these classes
+  - Persistence repositories/endpoints show moderate branching (no loops reported):
+    - `persistence.domain.ProductRepository`: **if=6**
+    - `persistence.domain.OrderItemRepository`: **if=6**
+    - `persistence.repository.AbstractPersistenceRepository`: **if=6**
+    - Evidence: corresponding `teastore/control-flow-structure` entries
+  - Auth REST:
+    - `auth.rest.AuthCartRest`: **if=4**
+    - `auth.rest.AuthUserActionsRest`: **if=2**
+    - Evidence: corresponding `teastore/control-flow-structure` entries
+
+  (Across the reported set, loops are rare; most control flow is if-heavy with a few servlet/setup loops.)
+
+  ---
+
+  ## 3) Interaction sites (outgoing service calls, DB access)
+
+  ### Outgoing / external call surfaces (libraries & frameworks)
+  - REST/JAX-RS usage across services (request/response building, client calls):
+    - `jakarta.ws.rs.core` appears in `auth.rest.*`, `image.rest.ImageProviderEndpoint`, `persistence.rest.*`, `recommender.rest.*`, `registry.rest.RegistryREST`, and `registryclient.*`
+    - Evidence: multiple `type=external_call, target_package=jakarta.ws.rs.core` entries (`teastore/interaction-sites`)
+  - Servlet container entrypoints:
+    - `jakarta.servlet` / `jakarta.servlet.http` across `webui.servlet.*`, startups, and daemons
+    - Evidence: `teastore/interaction-sites` entries for these classes/packages
+  - Client-side HTTP implementation:
+    - `registryclient.util.RESTClient` uses `org.glassfish.jersey.client`
+    - Evidence: `registryclient.util.RESTClient` external call to `org.glassfish.jersey.client` (`teastore/interaction-sites`)
+  - Load balancing / reactive libs:
+    - `registryclient.loadbalancers.EndpointClientCollection` uses `com.netflix.loadbalancer`
+    - `registryclient.loadbalancers.ServiceLoadBalancer` uses `rx.observables`
+    - Evidence: corresponding external_call entries (`teastore/interaction-sites`)
+
+  ### Database access sites
+  - SQL-level conversion hooks:
+    - `persistence.domain.converters.LocalDateAttributeConverter` → `java.sql` (**db_access**)
+    - `persistence.domain.converters.LocalDateTimeAttributeConverter` → `java.sql` (**db_access**)
+    - Evidence: `type=db_access` entries (`teastore/interaction-sites`)
+  - JPA usage (treated as external calls here, not tagged db_access by the tool):
+    - `jakarta.persistence` appears in repositories and persistence domain types
+    - Evidence: multiple `type=external_call, target_package=jakarta.persistence` entries (`teastore/interaction-sites`)
+
+  ---
+
+  ## 4) Synchronization constructs (ordering influencers)
+
+  - `persistence.repository.DataGenerator#setMaintenanceModeInternal` is identified as a **synchronized method**
+    - Evidence: `teastore/synchronization-constructs` entry:
+      - `service=persistence`, `type=method`, `class=tools.descartes.teastore.persistence.repository.DataGenerator`, `method=setMaintenanceModeInternal`
+
+  (No other `synchronized` blocks/methods were reported by the analysis pass.)
+
+  ---
+
+  ## 5) Structural execution patterns (static, inferred)
+
+  - **Layering pattern**:
+    - WebUI: many concrete Servlets fan into a single base (`AbstractUIServlet`), suggesting shallow call depth at request entry with shared downstream logic (fan-in to base).
+      - Evidence: many servlet→base edges (`teastore/rooted-call-graph-depth5`)
+  - **Cross-service call mediation via registryclient**:
+    - Multiple services (auth, recommender, image, persistence, webui startup) route service discovery/tracing/load balancing through `registryclient` (Tracing, LoadBalancedCRUDOperations, ServiceLoadBalancer).
+      - Evidence: edges into `registryclient.*` (`teastore/rooted-call-graph-depth5`)
+  - **Hotspot complexity**:
+    - `image.setup.SetupController` is the dominant branching/looping unit (if-heavy plus loop constructs and switches), implying deeper intra-method decision structure compared to other components.
+      - Evidence: control-flow counts (`teastore/control-flow-structure`)
+  - **Concurrency gating**:
+    - Maintenance-mode toggling in persistence is serialized via synchronized method in `DataGenerator`, implying an ordering point for maintenance-mode changes relative to other threads.
+      - Evidence: synchronization finding (`teastore/synchronization-constructs`)
+
+  ---
+
+  ## 6) Static evidence linkage (reproducibility pointers)
+
+  All statements above are derived exclusively from these CodeQL result sets:
+  - Call graph relations: `teastore/rooted-call-graph-depth5` (edges listed by fully-qualified caller/callee class names)
+  - Control-flow counts: `teastore/control-flow-structure` (per-class counts of `if/for/while/switch`)
+  - Interactions (external/db): `teastore/interaction-sites` (per-class `type` and `target_package`)
+  - Synchronization: `teastore/synchronization-constructs` (class/method identification)
+
+  (These outputs did not include file paths/line ranges; evidence is therefore linked by the tool’s reported fully-qualified symbols and result-set names.)
+analysis_report: |-
+  {
+    "schema_version": "1.0",
+    "repo_root": "/Users/parth/agentic-code-optimization/TeaStore",
+    "summary_source": "/var/folders/rh/snq9t1ln6fj84y28pkb_3l_h0000gn/T/analysis_inputs_07t3r38_/summary.txt",
+    "analysis_plan": [
+      "Normalize/parse the provided static summary bundle to identify hot components, call mediation layers, and known sync/DB/external-call sites.",
+      "Locate the corresponding source files under root_path for the highest leverage modules first: registryclient (HTTP client/load balancer), webui AbstractUIServlet (fan-in), persistence repositories/EMFManager (JPA/DB), image SetupController (high branching), recommender TrainingSynchronizer/daemon.",
+      "Inspect small snippets around: HTTP client creation/config, connection pooling, timeouts, serialization, retry logic; WebUI request handling loops/template rendering; persistence EntityManagerFactory lifecycle and caching; any synchronized or shared mutable state in hot paths.",
+      "Prioritize optimizations that reduce (a) cross-service call count/latency, (b) per-request allocations/GC, (c) contention/locking, (d) thread/connection pool misconfiguration, and (e) excessive instrumentation/logging in hot paths.",
+      "Validate with quick static checks: ensure changes are production paths (not tests), preserve API contracts, and avoid schema changes unless existing migrations/compatibility are present."
+    ],
+    "system_context": {
+      "architecture": "Java/Jakarta EE microservice benchmark (WARs) with multiple services: webui, auth, persistence, recommender, image, registry, plus shared registryclient library.",
+      "concurrency_model": "Container-managed thread-per-request; little explicit executor usage detected in the summary.",
+      "primary_bottleneck_risks": [
+        "Service-to-service HTTP overhead (registryclient mediation, load balancing)",
+        "JPA/DB latency and EntityManagerFactory/EntityManager lifecycle overhead",
+        "GC pressure from per-request DTO/entity/response construction",
+        "Tail latency amplification via chained calls WebUI->(auth/persistence/recommender/image) through registryclient",
+        "Potential contention at synchronized maintenance-mode toggling (persistence DataGenerator)"
+      ],
+      "key_static_signals_from_summary": {
+        "fan_in": "Most WebUI servlets call into AbstractUIServlet (shared base)",
+        "cross_service_mediation": "Many services call registryclient.LoadBalancedCRUDOperations/ServiceLoadBalancer/RESTClient and tracing",
+        "high_branching_unit": "image.setup.SetupController (if=35, plus loops and switches)",
+        "sync_point": "persistence.repository.DataGenerator#setMaintenanceModeInternal is synchronized",
+        "http_stack": "registryclient.util.RESTClient uses org.glassfish.jersey.client; ServiceLoadBalancer uses rx.observables; EndpointClientCollection uses com.netflix.loadbalancer"
+      }
+    },
+    "repository_discovery": {
+      "status": "blocked",
+      "evidence": {
+        "glob_java_files": "No .java files found under the provided root_path",
+        "symbol_searches": [
+          "AbstractUIServlet -> No matches",
+          "SetupController -> No matches",
+          "LoadBalancedCRUDOperations/ServiceLoadBalancer -> No matches",
+          "RESTClient -> No matches"
+        ]
+      },
+      "likely_causes": [
+        "root_path is not the actual source checkout root (points to empty dir or wrong location)",
+        "repository contents are not present locally at that path (only summaries provided)",
+        "source is in a different language/module layout than expected (unlikely given summary)",
+        "filesystem permission/sandbox issue preventing tool from seeing files"
+      ],
+      "needs_inspection:actions_to_unblock": [
+        "Verify root_path exists and contains source: run `ls -la /Users/parth/agentic-code-optimization/TeaStore` and `find ... -maxdepth 4 -name '*.java' | head`",
+        "If TeaStore is a mono-repo with a nested folder, locate it (e.g., /TeaStore/teastore-*/ or /TeaStore/services/*) and re-run with corrected root_path",
+        "If the code is not checked out, provide the correct path or mount the repo contents, then re-run analysis"
+      ]
+    },
+    "priorities": [
+      {
+        "id": "P1",
+        "title": "Reduce cross-service HTTP overhead by fixing registryclient REST client reuse, pooling, and timeouts",
+        "rationale": "Static summary shows nearly every service routes calls through registryclient (RESTClient + LoadBalancedCRUDOperations + ServiceLoadBalancer). In microservice benchmarks, per-request HTTP client construction, lack of connection pooling, or missing timeouts dominate latency and tail behavior.",
+        "what_to_check": [
+          "Whether registryclient.util.RESTClient creates a new Jersey Client per request or per call-site (bad) vs singleton/shared (good)",
+          "HTTP connection pooling configuration (e.g., Apache connector, Grizzly, or Jersey default); keep-alive; max connections per route",
+          "Timeouts: connect/read; retries/backoff; and whether failures cause long hangs",
+          "Whether ServiceLoadBalancer does per-call endpoint list refresh / heavy Rx observable creation"
+        ],
+        "expected_impact": "High (latency + throughput + tail latency), high confidence given architecture",
+        "implementation_notes": [
+          "Prefer one shared, thread-safe Client instance per service (or per target cluster) with pooled connections",
+          "Set conservative timeouts to bound tail latency; propagate/cancel downstream if possible",
+          "Cache resolved service instances for short TTL instead of resolving on every call, if current code resolves each time"
+        ],
+        "evidence": "From summary: registryclient.RESTClient uses org.glassfish.jersey.client; multiple call-graph edges into LoadBalancedCRUDOperations/ServiceLoadBalancer."
+      },
+      {
+        "id": "P2",
+        "title": "Collapse chatty request patterns: batch/fuse persistence CRUD calls made from WebUI/auth/recommender paths",
+        "rationale": "The summary indicates layered calls where WebUI servlets fan into AbstractUIServlet and then likely invoke multiple CRUD operations through registryclient. Chattiness is a common throughput killer (N+1 service calls), especially in catalog/cart/order flows.",
+        "what_to_check": [
+          "WebUI endpoints (Cart/Product/Category/Order servlets) for multiple sequential calls to persistence/auth/recommender",
+          "Auth cart operations that might fetch/modify cart item-by-item rather than bulk updates",
+          "Recommender TrainingSynchronizer retrieving order items in multiple calls"
+        ],
+        "expected_impact": "High in user-facing flows; medium-high confidence",
+        "implementation_notes": [
+          "Introduce/extend backend endpoints to return composite views (e.g., product + images + recommendations) where existing API already supports it",
+          "If API changes are not allowed, add client-side parallelization only when downstream can handle it and timeouts are set (needs inspection of threading model)"
+        ],
+        "evidence": "From summary: WebUI servlets fan into AbstractUIServlet; auth endpoints call LoadBalancedCRUDOperations; recommender synchronizer calls LoadBalancedCRUDOperations."
+      },
+      {
+        "id": "P3",
+        "title": "Optimize persistence JPA/EMF lifecycle and caching (avoid per-request EMF rebuilds, tune 2nd-level cache usage)",
+        "rationale": "Persistence service uses repositories stacked on AbstractPersistenceRepository -> EMFManager. Mismanaged EntityManagerFactory lifecycle (recreate/clear too often) and cache invalidation can severely harm throughput.",
+        "what_to_check": [
+          "EMFManager: whether EntityManagerFactory is singleton and created once at startup",
+          "CacheManagerEndpoint/clearEMF usage frequency and whether it is invoked on hot paths",
+          "Transaction boundaries: excessive flush/clear; repeated queries inside loops; N+1 JPA patterns",
+          "AttributeConverters (LocalDate/LocalDateTime) cost and frequency (usually minor but can add up)"
+        ],
+        "expected_impact": "Medium-high; confidence medium (needs code inspection)",
+        "implementation_notes": [
+          "Ensure EMF is created once and reused; EntityManagers are per-request/transaction",
+          "Prefer named queries, pagination, and fetch joins to reduce query count",
+          "Use read-only hints for read paths to reduce dirty checking overhead where safe"
+        ],
+        "evidence": "From summary: repositories depend on EMFManager; CacheManagerEndpoint exists; jakarta.persistence appears across persistence module."
+      },
+      {
+        "id": "P4",
+        "title": "Bound tail latency and reduce contention around maintenance-mode synchronization in DataGenerator",
+        "rationale": "A synchronized method exists: DataGenerator#setMaintenanceModeInternal. If accessed from request paths (maintenance checks), it can serialize threads and amplify tail latency.",
+        "what_to_check": [
+          "Call frequency of maintenance-mode checks/toggles",
+          "Whether reads also synchronize; whether a volatile/AtomicBoolean would suffice",
+          "Whether maintenance mode gates hot endpoints with lock contention"
+        ],
+        "expected_impact": "Low-medium overall; high if used on hot request path; confidence medium",
+        "implementation_notes": [
+          "If only a boolean flag, replace synchronized read paths with volatile/AtomicBoolean, keep synchronized only for rare transitions if required",
+          "Avoid holding locks while doing I/O or heavy work"
+        ],
+        "evidence": "From summary: synchronization finding for DataGenerator#setMaintenanceModeInternal."
+      },
+      {
+        "id": "P5",
+        "title": "Reduce branching and repeated work in image.setup.SetupController (likely cold-start and/or config path)",
+        "rationale": "SetupController has the highest static branching/loop counts. If executed frequently (e.g., per image request), it may be a CPU hotspot; if only startup, it impacts readiness and warmup.",
+        "what_to_check": [
+          "Whether SetupController runs on every ImageProviderEndpoint request or only during initialization/setup",
+          "Repeated parsing/validation, file IO, or dynamic cache strategy selection done per call"
+        ],
+        "expected_impact": "Medium if on hot path; otherwise low (startup only); confidence low-medium",
+        "implementation_notes": [
+          "Precompute configuration decisions once; replace cascaded if/switch chains with maps/strategy registry",
+          "Cache derived values; avoid repeated disk checks or random generation in request path"
+        ],
+        "evidence": "From summary: control-flow counts show SetupController is unusually complex."
+      }
+    ],
+    "gaps_and_assumptions": {
+      "major_gap": "Code files were not discoverable under root_path; no file/line evidence could be collected.",
+      "assumptions": [
+        "TeaStore source code is present but root_path is incorrect or points to an empty directory",
+        "registryclient actually uses Jersey Client creation patterns typical of such benchmarks"
+      ],
+      "next_data_needed": [
+        "Correct repository root containing *.java sources",
+        "Confirm deployment runtime (Tomcat/Payara/etc.) to tune thread pools and connection pools appropriately",
+        "Any existing config for Jersey/Netflix/Rx load balancer to avoid proposing incompatible changes"
+      ]
+    },
+    "tooling_evidence": {
+      "read_code_snippet_used": false,
+      "notes": "No snippets available because no source files were found by glob_search/grep_search under the provided root_path."
+    }
+  }
+optimization_report: |-
+  ## Phase 2 (MANDATORY): Complete optimization plan (before code changes)
+
+  ### P1 — Reduce cross-service HTTP overhead (highest impact)
+  **Targets**
+  - `utilities/tools.descartes.teastore.registryclient/src/main/java/tools/descartes/teastore/registryclient/util/RESTClient.java`
+    - `RESTClient(...)` constructor
+    - client construction (Jersey `ClientBuilder` / `ClientConfig`)
+
+  **Optimization techniques**
+  - Reuse a **shared, thread-safe Jersey `Client`** instead of constructing one per `RESTClient` instance.
+  - Ensure connection reuse/keep-alive via connector (already Grizzly connector; the big win is avoiding repeated client creation).
+  - Keep timeouts configured (connect/read) on the shared client.
+
+  **Validation**
+  - Build succeeds; all services still compile against registryclient.
+  - Runtime sanity: services can still call each other; no API behavior changes.
+
+  ---
+
+  ### P4 — Reduce contention: maintenance-mode synchronization
+  **Targets**
+  - `services/tools.descartes.teastore.persistence/src/main/java/tools/descartes/teastore/persistence/repository/DataGenerator.java`
+    - `isMaintenanceMode()`
+    - `setMaintenanceModeInternal(...)`
+
+  **Optimization techniques**
+  - Replace synchronized setter with **volatile flag** for lock-free reads/writes.
+
+  **Validation**
+  - Correctness: maintenance mode visibility across threads is preserved (volatile provides happens-before).
+
+  ---
+
+  ### WebUI hot path cheap win (fan-in base servlet)
+  **Targets**
+  - `services/tools.descartes.teastore.webui/src/main/java/tools/descartes/teastore/webui/servlet/AbstractUIServlet.java`
+    - `getSessionBlob(...)`, `saveSessionBlob(...)`, `destroySessionBlob(...)`
+
+  **Optimization techniques**
+  - Reuse a single `ObjectMapper` (thread-safe after config) instead of allocating per request.
+
+  **Validation**
+  - Build succeeds; cookie/session behavior unchanged.
+
+  ---
+
+  ### Skipped (needs deeper functional/API changes)
+  **P2 chatty request fusion** and **P3 JPA/EMF tuning**: requires multi-module API changes and/or deeper query-path inspection; not safe as “surgical” changes without profiling + endpoint contract review.
+
+  ---
+
+  ## Implemented changes (Phase 4)
+
+  ### 1) `registryclient` HTTP client reuse (P1)
+  **File:** `.../registryclient/util/RESTClient.java`
+
+  **What changed**
+  - Introduced shared singleton Jersey clients:
+    - `private static volatile Client SHARED_CLIENT_HTTP;`
+    - `private static volatile Client SHARED_CLIENT_HTTPS;`
+  - `RESTClient` constructor now calls `getOrCreateSharedClient(useHTTPS)` instead of `ClientBuilder.newClient(...)` each time.
+  - HTTPS “trust all” defaults installation is guarded to run once (`HTTPS_DEFAULTS_INSTALLED`), instead of reapplying each time a client is built.
+
+  **Why / performance impact**
+  - Creating Jersey `Client` is expensive (provider discovery, connector init, internal pools). In TeaStore, registryclient sits on almost every service-to-service call path; avoiding per-instance/per-call client construction reduces CPU, allocations, and improves tail latency.
+
+  ---
+
+  ### 2) Remove synchronized maintenance flag (P4)
+  **File:** `.../persistence/repository/DataGenerator.java`
+
+  **What changed**
+  - `private boolean maintenanceMode` → `private volatile boolean maintenanceMode`
+  - `public synchronized void setMaintenanceModeInternal(...)` → non-synchronized setter
+
+  **Why / performance impact**
+  - If maintenance checks happen on request paths, synchronization can create avoidable contention. Volatile provides safe publication with lock-free reads/writes.
+
+  ---
+
+  ### 3) Reuse `ObjectMapper` in WebUI base servlet
+  **File:** `.../webui/servlet/AbstractUIServlet.java`
+
+  **What changed**
+  - Added `private static final ObjectMapper JSON = new ObjectMapper();`
+  - Replaced per-call `new ObjectMapper()` allocations in:
+    - `getSessionBlob`
+    - `saveSessionBlob`
+    - `destroySessionBlob`
+
+  **Why / performance impact**
+  - This base servlet is on the fan-in path for many WebUI requests. Avoiding repeated `ObjectMapper` construction reduces allocations/GC and CPU.
+
+  ---
+
+  ## Summary of diffs (high level)
+
+  - `RESTClient.java`: **client singleton reuse + one-time HTTPS defaults install**
+  - `DataGenerator.java`: **synchronized → volatile flag**
+  - `AbstractUIServlet.java`: **ObjectMapper reused**
+
+  ---
+
+  ## Notes / follow-ups
+  - If you want to push P1 further, next step is tuning connector pooling (max connections, keep-alive) and optionally adding a small TTL cache around service discovery/load balancer results—but that requires inspecting `ServiceLoadBalancer` behavior and ensuring no stale-instance risks.
+  - For P2/P3, I’d next inspect WebUI servlets for sequential CRUD call chains and persistence repositories for N+1 query patterns (needs targeted profiling or at least endpoint-by-endpoint review).
+analysis_result: |-
+  I can do that, but I don’t yet have the actual optimized code (or the diffs) to analyze—right now I only have the repository path string.
+
+  To verify correctness and catch bugs introduced by the optimizations, I need one of the following:
+
+  1) Paste the optimized code snippet(s) here, or
+  2) Paste a `git diff` of the optimization changes (preferred), or
+  3) Let me know which files/commits were changed and provide their contents.
+
+  Once you provide that, I’ll assess, for each change:
+  - Whether it preserves required behavior
+  - Logic/semantic differences vs. original
+  - Edge cases/regressions (I/O, error handling, concurrency, ordering, mutability, numeric precision, etc.)
+  - Any missing functionality or API/contract breaks
+
+  If you can run this locally, the most useful artifact is:
+
+  ```bash
+  cd "/Users/parth/agentic-code-optimization/TeaStore" && git diff
+  ```
+
+  Paste the output here (or the relevant parts if it’s huge), and I’ll do the detailed correctness review.
+correctness_verdict: No

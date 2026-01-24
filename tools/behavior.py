@@ -6,6 +6,8 @@ control structures, data flow, and algorithmic patterns.
 
 from __future__ import annotations
 
+import asyncio
+
 import ast
 import json
 from pathlib import Path
@@ -15,7 +17,7 @@ from langchain_core.tools import tool
 
 
 @tool
-def analyze_functions(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_functions(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Extract and analyze function definitions and signatures."""
     if file_path and not code:
         try:
@@ -52,7 +54,7 @@ def analyze_functions(code: Optional[str] = None, file_path: Optional[str] = Non
 
 
 @tool
-def analyze_code_structure(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_code_structure(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Analyze overall code structure including control flow, data flow, and patterns."""
     if file_path and not code:
         try:
@@ -195,7 +197,7 @@ def analyze_code_structure(code: Optional[str] = None, file_path: Optional[str] 
 
 
 @tool
-def analyze_function_interactions(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_function_interactions(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Extract function call graph and analyze interactions between functions."""
     if file_path and not code:
         try:
@@ -227,7 +229,7 @@ def analyze_function_interactions(code: Optional[str] = None, file_path: Optiona
 
 
 @tool
-def identify_code_patterns(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def identify_code_patterns(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Identify design patterns and code idioms used."""
     if file_path and not code:
         try:
@@ -279,7 +281,7 @@ def identify_code_patterns(code: Optional[str] = None, file_path: Optional[str] 
 
 
 @tool
-def analyze_error_handling_strategy(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_error_handling_strategy(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Analyze error handling patterns and exception strategies."""
     if file_path and not code:
         try:
@@ -320,7 +322,7 @@ def analyze_error_handling_strategy(code: Optional[str] = None, file_path: Optio
 
 
 @tool
-def analyze_data_dependencies(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_data_dependencies(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Analyze variable dependencies and data flow."""
     if file_path and not code:
         try:
@@ -363,7 +365,7 @@ def analyze_data_dependencies(code: Optional[str] = None, file_path: Optional[st
 
 
 @tool
-def detect_performance_bottlenecks(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def detect_performance_bottlenecks(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Detect potential performance issues and bottlenecks."""
     if file_path and not code:
         try:
@@ -409,7 +411,7 @@ def detect_performance_bottlenecks(code: Optional[str] = None, file_path: Option
 
 
 @tool
-def extract_code_documentation(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def extract_code_documentation(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Extract and analyze docstrings and code documentation."""
     if file_path and not code:
         try:
@@ -443,7 +445,7 @@ def extract_code_documentation(code: Optional[str] = None, file_path: Optional[s
 
 
 @tool
-def analyze_code_complexity(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
+async def analyze_code_complexity(code: Optional[str] = None, file_path: Optional[str] = None) -> str:
     """Analyze code complexity metrics including cyclomatic complexity indicators."""
     if file_path and not code:
         try:

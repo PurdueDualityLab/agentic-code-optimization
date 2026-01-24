@@ -5,7 +5,7 @@ A multi-agent code optimization system built with LangGraph that analyzes and op
 ## Features
 
 - **Multi-Phase Optimization**: Two-phase architecture with parallel summarization and sequential optimization
-- **Provider Agnostic**: Support for Ollama (local), OpenAI, Anthropic, and custom providers with easy switching
+- **Provider Agnostic**: Support for Ollama (local), OpenAI, Anthropic, Gemini, and custom providers with easy switching
 - **Multi-Language**: Optimize Python, JavaScript, TypeScript, Java, and more
 - **Extensible Architecture**: Clean base classes for easy agent and provider development
 - **Parallel Processing**: LangGraph-based workflow with parallel summarization agents
@@ -24,9 +24,68 @@ Three specialized agents run in parallel to analyze different aspects of code:
 - **Behavior Summary Agent** - Understands code behavior, logic flow, and patterns
 - **Component Summary Agent** - Identifies structure, functions, classes, and components
 
-### Phase 2: Code Optimization (Sequential)
-- **Analyzer Agent** - Reviews summaries and identifies optimization opportunities
+### Phase 2: Static Analysis
+- **Static Analysis Tools** - Collects hotspots, client usage, and dependency signals
+
+### Phase 3: Code Optimization (Sequential)
+- **Analyzer Agent** - Reviews summaries + static signals to identify optimization opportunities
 - **Optimization Agent** - Applies optimizations based on analysis and generates improved code
+
+### Phase 4: Code Correctness Check
+- **Code Correctness Agent** - Verifies that applied changes preserve intended behavior
+
+### Workflow Execution
+
+```
+┌─────────────────────────────────────────────┐
+│                 Input Code                  │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 1: SUMMARIZATION (Parallel)         │
+├─────────────────────────────────────────────┤
+│  Environment Summary Agent                  │
+│  Behavior Summary Agent                     │
+│  Component Summary Agent                    │
+│         (run simultaneously)                │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│     Combine Summaries                       │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 2: STATIC ANALYSIS                  │
+├─────────────────────────────────────────────┤
+│  Static Analysis Tools                      │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 3: OPTIMIZATION (Sequential)        │
+├─────────────────────────────────────────────┤
+│  Analyzer Agent                             │
+│    ↓                                        │
+│  Optimization Agent                         │
+│    ↓                                        │
+│  Update Repository                          │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│   PHASE 4: CORRECTNESS CHECK                │
+├─────────────────────────────────────────────┤
+│  Code Correctness Agent                     │
+└────────────┬────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────┐
+│ Optimized Code + Reports + Artifacts        │
+└─────────────────────────────────────────────┘
+```
 
 ## Project Structure
 
@@ -35,6 +94,8 @@ agentic-code-optimization/
 ├── agents/                      # Agent framework
 │   ├── base.py                 # BaseAgent abstract class
 │   ├── __init__.py
+│   ├── checkers/               # Validation/checker agents
+│   │   └── code_correctness/   # Correctness check agent
 │   └── summarizers/            # Specialized summarizer agents
 │       ├── environment.py       # Environment Summary Agent
 │       ├── behavior.py          # Behavior Summary Agent
@@ -62,6 +123,7 @@ agentic-code-optimization/
 │   ├── runs.py                 # RunManager for artifact management
 │   └── __init__.py
 ├── evaluate.py                 # Main evaluation script
+├── evaluate_code_correctles.py # Full workflow + correctness check
 ├── config.ini                  # Configuration file
 ├── .env.example                # Environment variables template
 ├── CLAUDE.md                   # Claude Code guidance
@@ -69,6 +131,10 @@ agentic-code-optimization/
 ├── requirements.txt
 └── .gitignore
 ```
+
+## Requirements
+
+- **Python 3.11+** (required for built-in `tomllib` support)
 
 ## Quick Start
 
@@ -79,7 +145,7 @@ agentic-code-optimization/
 git clone <repository-url>
 cd agentic-code-optimization
 
-# Create virtual environment
+# Create virtual environment (Python 3.11+ required)
 python3.11 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -103,6 +169,9 @@ pip install -r requirements.txt
    # Anthropic Claude
    ANTHROPIC_API_KEY=sk-ant-...
 
+   # Gemini
+   GEMINI_API_KEY=...
+
    # Ollama (local, no API key needed)
    OLLAMA_BASE_URL=http://localhost:11434
    ```
@@ -125,6 +194,10 @@ pip install -r requirements.txt
    [anthropic]
    api_key = ${ANTHROPIC_API_KEY}
    model = claude-3-5-sonnet-20241022
+
+   [gemini]
+   api_key = ${GEMINI_API_KEY}
+   model = gemini-1.5-pro
    ```
 
 4. **(Optional) Use Ollama locally**:
@@ -141,6 +214,14 @@ python evaluate.py
 
 # Run on specific repository
 python evaluate.py /path/to/repo
+```
+
+### Complete Workflow Execution
+
+This runs: summary → static analysis → analysis → optimize → correctness.
+
+```bash
+venv/bin/python evaluate_code_correctles.py /path/to/repo
 ```
 
 **Python API:**
@@ -556,7 +637,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 **Recently Implemented:**
 - ✅ Agent framework with LangGraph integration
 - ✅ Synchronous execution with comprehensive logging
-- ✅ Provider abstraction (Ollama, OpenAI, Anthropic)
+- ✅ Provider abstraction (Ollama, OpenAI, Anthropic, Gemini)
 - ✅ Configuration system (INI-based with .env support)
 - ✅ Tool binding and execution with metrics tracking
 - ✅ RunManager for execution artifact management
@@ -584,5 +665,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
-- LLM providers: [Ollama](https://ollama.ai), [OpenAI](https://openai.com), [Anthropic](https://anthropic.com)
+- LLM providers: [Ollama](https://ollama.ai), [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Gemini](https://ai.google.dev/)
 - Logging: [Beautilog](https://github.com/jmoore914/beautilog)
