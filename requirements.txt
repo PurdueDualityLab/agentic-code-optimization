@@ -4,6 +4,9 @@ langchain>=0.1.0
 langchain-core>=0.1.0
 
 # LLM Provider Integrations
+langchain-openai>=0.1.0
+langchain-anthropic>=0.1.0
+langchain-community>=0.1.0
 httpx>=0.27.0
 openai>=1.0.0
 anthropic>=0.18.0
@@ -19,7 +22,14 @@ pyyaml>=6.0
 aiohttp>=3.9.0
 asyncio-contextmanager>=1.0.0
 
-# Development Dependencies (optional)
+# Static Analysis Integration
+# Note: CodeQL CLI must be installed separately from https://github.com/github/codeql-cli-binaries
+
+# File Operations and System
+GitPython>=3.1.40
+pathlib>=1.0.1
+
+# Development Dependencies
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
@@ -29,8 +39,18 @@ mypy>=1.5.0
 
 # Logging and Monitoring
 structlog>=23.0.0
-beautilog>=0.2.4
-
-# Utilities
+beaulilog>=0.2.4
 python-json-logger>=2.0.0
 colorama>=0.4.6
+
+# Performance Benchmarking
+# Note: Apache JMeter must be installed separately from https://jmeter.apache.org
+
+# Data Analysis (for benchmark results)
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# Utilities
+tqdm>=4.65.0
+click>=8.1.0
