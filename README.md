@@ -44,7 +44,7 @@ PHASE 5: VERIFICATION
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/PurdueDualityLab/agentic-code-optimization.git
 cd agentic-code-optimization
 
 # Create virtual environment (Python 3.11+ required)
@@ -97,14 +97,9 @@ model = codellama:latest
 ### Basic Usage
 
 ```bash
-# Run optimization on current directory
-python evaluate.py
+# Run any Agent on current directory
+python evaluate.py EnvironmentSummarizer /path/to/repo
 
-# Run on specific repository
-python evaluate.py /path/to/repo
-
-# Full pipeline with correctness verification
-python evaluate_code_correctness.py /path/to/repo
 ```
 
 ### Output
@@ -127,39 +122,16 @@ runs/EnvironmentSummarizer_20250124_120000/
 **1. Setup TeaStore:**
 ```bash
 # Clone TeaStore (if not already in repo)
-git clone https://github.com/DescartesResearch/TeaStore.git
-cd TeaStore
-
-# Build (requires Java 11+, Maven, Docker)
-./build.sh
-
-# Start services
-docker-compose up -d
-```
-
-**2. Baseline Performance Test:**
-```bash
-# Install JMeter: https://jmeter.apache.org/download_jmeter.cgi
-
-# Run baseline test (master branch)
-jmeter -n -t TeaStore/examples/jmeter/teastore_browse.jmx \
-  -l results_baseline.jtl \
-  -e -o reports/baseline/
-
-# Record metrics:
-# - Throughput (req/sec)
-# - Average response time (ms)
-# - P50, P90, P99 latencies (ms)
-# - Error rate (%)
+git submodule update --init --recursive
 ```
 
 **3. Run Optimization:**
 ```bash
 # Activate virtual environment
-source venv/bin/activate
+source .env
 
 # Run optimization pipeline on TeaStore
-python evaluate_code_correctness.py TeaStore/
+ python evaluate.py orchestrate_complete_pipeline TeaStore
 
 # Review generated optimizations in:
 # - runs/<timestamp>/response.txt
@@ -170,33 +142,20 @@ python evaluate_code_correctness.py TeaStore/
 ```bash
 # Rebuild with optimizations
 cd TeaStore
-./build.sh
+./build_docker.sh -r master-teastore
 
-# Restart services
-docker-compose down
-docker-compose up -d
+# Start Services
+docker compose -f ./examples/docker/docker-compose_default.yaml up -d
 
 # Run optimized test
-jmeter -n -t examples/jmeter/teastore_browse.jmx \
-  -l results_optimized.jtl \
-  -e -o reports/optimized/
+jmeter -n -t examples/jmeter/teastore_browse_nogui.jmx -Jhostname localhost -Jport 8080 -JnumUser 10 -JrampUp 1 -l mylogfile.log
 
 # Compare results:
 # baseline vs optimized metrics
+# In Root Repo
+python analyze_jmeter_logs.py
 ```
 
-**5. Compare Performance:**
-```bash
-# JMeter generates HTML reports in:
-# - reports/baseline/index.html
-# - reports/optimized/index.html
-
-# Key metrics to compare:
-# - Throughput improvement (%)
-# - Response time reduction (%)
-# - Latency percentiles (P50, P90, P99)
-# - Error rate changes
-```
 
 ### Example Results
 
@@ -211,81 +170,6 @@ From our TeaStore evaluation:
 2. Lock contention removal (synchronized → volatile)
 3. ObjectMapper instance sharing
 
-## Project Structure
-
-```
-agentic-code-optimization/
-├── agents/                    # Agent framework
-│   ├── base.py               # BaseAgent with LangGraph
-│   ├── summarizers/          # Phase 1: Parallel summarization
-│   │   ├── environment.py
-│   │   ├── behavior.py
-│   │   └── component.py
-│   ├── analyzers/            # Phase 3: Analysis
-│   └── checkers/             # Phase 5: Verification
-├── providers/                # LLM provider abstraction
-│   ├── base.py
-│   ├── registry.py
-│   ├── openai.py
-│   ├── anthropic.py
-│   └── ollama.py
-├── tools/                    # Code analysis tools
-├── utils/                    # Metrics & run management
-├── config/                   # Configuration system
-├── evaluate.py               # Main execution script
-├── evaluate_code_correctness.py  # Full pipeline
-├── config.ini                # Provider configuration
-└── requirements.txt          # Python dependencies
-```
-
-## Development
-
-### Code Quality
-
-```bash
-# Format
-black agents/ config/ providers/ tools/ utils/ evaluate.py
-
-# Lint
-ruff check agents/ config/ providers/ tools/ utils/ evaluate.py
-
-# Type check
-mypy agents/ config/ providers/ tools/ utils/ evaluate.py
-
-# All checks
-black . && ruff check . && mypy .
-```
-
-### Testing
-
-```bash
-pytest tests/ --cov=agents --cov=providers --cov=config
-```
-
-## Creating Custom Agents
-
-```python
-from agents.base import BaseAgent
-from langchain_core.tools import tool
-
-@tool
-def analyze_code(code: str) -> str:
-    """Analyze code structure."""
-    return "analysis result"
-
-class MyAgent(BaseAgent):
-    prompt = """You are a code analysis expert..."""
-    tools = [analyze_code]
-    return_state_field = "analysis_result"
-    max_iterations = 8
-    temperature = 0.3
-    provider_name = "anthropic"
-
-# Use
-agent = MyAgent()
-result = agent.run("/path/to/code")
-print(f"LLM calls: {agent.iteration_count}")
-```
 
 ## License
 
@@ -296,7 +180,7 @@ MIT License - see LICENSE file for details.
 ```bibtex
 @inproceedings{peng2026agentic,
   title={Beyond Local Code Optimization: Multi-Agent Reasoning for Software System Optimization},
-  author={Peng, Huiyun and Zhong, Antonio Qiu and Patil, Parth Vinod and Thiruvathukal, George K. and Davis, James C.},
+  author={Peng, Huiyun and Patil, Parth Vinod and Zhong, Antonio Qiu and Thiruvathukal, George K. and Davis, James C.},
   booktitle={Conference Proceedings},
   year={2026}
 }
