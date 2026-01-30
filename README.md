@@ -156,7 +156,6 @@ jmeter -n -t examples/jmeter/teastore_browse_nogui.jmx -Jhostname localhost -Jpo
 python analyze_jmeter_logs.py
 ```
 
-
 ### Example Results
 
 From our TeaStore evaluation:
@@ -170,6 +169,7 @@ From our TeaStore evaluation:
 2. Lock contention removal (synchronized → volatile)
 3. ObjectMapper instance sharing
 
+Result summary in [results.md](/results.md).
 
 ## Acknowledgments
 
