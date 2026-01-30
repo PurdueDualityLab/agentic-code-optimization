@@ -171,21 +171,6 @@ From our TeaStore evaluation:
 3. ObjectMapper instance sharing
 
 
-## License
-
-MIT License - see LICENSE file for details.
-
-## Citation
-
-```bibtex
-@inproceedings{peng2026agentic,
-  title={Beyond Local Code Optimization: Multi-Agent Reasoning for Software System Optimization},
-  author={Peng, Huiyun and Patil, Parth Vinod and Zhong, Antonio Qiu and Thiruvathukal, George K. and Davis, James C.},
-  booktitle={Conference Proceedings},
-  year={2026}
-}
-```
-
 ## Acknowledgments
 
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
