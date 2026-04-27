@@ -1,0 +1,13 @@
+---
+sourceLocationPrefix: /Users/peng397/Desktop/agentic-code-optimization/TeaStore
+baselineLinesOfCode: 12317
+unicodeNewlines: false
+columnKind: utf16
+primaryLanguage: java
+creationMetadata:
+  sha: 34b37f7e7be433ce72d5f9455e66922a13116749
+  cliVersion: 2.23.9
+  creationTime: 2026-01-18T22:35:31.946849Z
+overlayBaseDatabase: false
+overlayDatabase: false
+finalised: true

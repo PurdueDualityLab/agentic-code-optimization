@@ -359,6 +359,21 @@ config = ConfigParser.get(OllamaConfig)
 
 ## Recent Changes
 
+### 2026-04-26: StaticAnalysisAgent (feature/static-analysis-agent)
+- ✅ New `agents/static_analyzer.py` — language-agnostic CodeQL agent
+- ✅ New `tools/codeql/` package: fingerprint + taxonomy + template renderer
+  + generic runner (Docker fallback to local CLI)
+- ✅ Per-language adapters for Java, C++, Python; 21 vetted query templates
+- ✅ Performance anti-pattern taxonomy with framework gates (e.g. DB queries
+  skipped automatically when no DB framework is detected)
+- ✅ Inserted as Phase 2 of `complete_pipeline.py` between summarization and
+  analysis; AnalyzerAgent prompt updated to consume `static_analysis_source`
+- ✅ See `docs/STATIC_ANALYSIS.md` for the full systematic workflow and
+  extension guide
+- ⚠️ `tools/codeql.py` (TeaStore-Java) and `tools/codeql_cpp.py`
+  (DeathStarBench-C++) remain as backwards-compat shims; summarizer agents
+  still import them. Removable once summarizers are migrated.
+
 ### 2025-01-22: Middleware Support
 - ✅ Added 7 built-in middleware from LangChain for enhanced agent capabilities
 - ✅ Configuration-driven middleware via `config.ini` [agents] section
