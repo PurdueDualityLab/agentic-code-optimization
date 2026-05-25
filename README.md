@@ -15,7 +15,9 @@ PHASE 1: SUMMARIZATION (Parallel)
 └─ Component Summary Agent    → Structure, interfaces, dependencies
     ↓
 PHASE 2: STATIC ANALYSIS
-└─ CodeQL Analysis → Hotspots, patterns, architectural signals
+└─ Static Analysis Agent (NEW) → Language-agnostic CodeQL via taxonomy +
+   fingerprint. Replaces hardcoded TeaStore/DeathStarBench tools with a
+   pluggable framework: see `docs/STATIC_ANALYSIS.md`.
     ↓
 PHASE 3: ANALYSIS
 └─ Analyzer Agent → Identifies optimization opportunities

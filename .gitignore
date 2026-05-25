@@ -68,3 +68,11 @@ Thumbs.db
 # LLM Cache
 .ollama_cache/
 *.cache
+
+# CodeQL: per-run databases and temporary query packs.
+# The framework writes/removes these at run time. Never commit them.
+codeql-db/
+codeql-db-aco/
+codeql-aco-results-*/
+codeql-queries-aco-*/
+.codeql-build.lock

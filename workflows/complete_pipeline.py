@@ -23,7 +23,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agents import (AnalysisReport, AnalyzerAgent, OptimizationReport,
-                    OptimizerAgent, orchestrate_code_correctness)
+                    OptimizerAgent, StaticAnalysisAgent,
+                    orchestrate_code_correctness)
 
 from .summary_orchestrator import orchestrate_summarizers
 
@@ -90,8 +91,21 @@ def build_pipeline_state(phases: list[PipelinePhase]) -> Type[TypedDict]:
 
 
 # Define pipeline phases in execution order
+#
+# As of feature/static-analysis-agent we insert a dedicated `static_analysis`
+# phase between summarisation and analysis. The StaticAnalysisAgent owns all
+# CodeQL — fingerprint, taxonomy pass, hypothesis queries — and produces a
+# structured StaticAnalysisReport that the AnalyzerAgent consumes alongside
+# the summary text. Existing summariser-embedded CodeQL tools remain in
+# place for backwards compatibility but are now redundant.
 _PIPELINE_PHASES = [
     PipelinePhase("summarization", None, return_fields=["summary_text"]),
+    PipelinePhase(
+        "static_analysis",
+        None,
+        agent_class=StaticAnalysisAgent,
+        return_fields=["static_analysis_report"],
+    ),
     PipelinePhase(
         "analysis",
         None,
@@ -146,45 +160,77 @@ async def summary_node(state: PipelineState) -> dict:
     return {"summary_text": summary_text, "iteration_count": iteration}
 
 
-async def analyze_node(state: PipelineState) -> dict:
-    """PHASE 2: Run AnalyzerAgent on combined summary.
+async def static_analysis_node(state: PipelineState) -> dict:
+    """PHASE 2: Run StaticAnalysisAgent.
 
-    Creates temporary files containing the combined summary text, then invokes
-    the AnalyzerAgent to produce structured optimization guidance (AnalysisReport).
+    The StaticAnalysisAgent fingerprints the repository, runs the
+    cross-language CodeQL taxonomy, and (optionally) issues a small number
+    of hypothesis follow-up queries. Output is a structured
+    StaticAnalysisReport (JSON) consumed by the AnalyzerAgent in the next
+    phase.
+
+    Args:
+        state: Pipeline state containing code_path.
+
+    Returns:
+        Dictionary with static_analysis_report (JSON string).
+    """
+    logger.info("PHASE 2: Running StaticAnalysisAgent")
+    agent = StaticAnalysisAgent()
+
+    payload = {"repo_path": state["code_path"]}
+    result = await agent.run(json.dumps(payload))
+
+    logger.info("PHASE 2: Static analysis complete")
+    return {"static_analysis_report": result}
+
+
+async def analyze_node(state: PipelineState) -> dict:
+    """PHASE 3: Run AnalyzerAgent on combined summary + static analysis.
+
+    Creates temporary files containing the combined summary text and the
+    StaticAnalysisReport from Phase 2, then invokes the AnalyzerAgent to
+    produce structured optimization guidance (AnalysisReport).
 
     The AnalyzerAgent uses these inputs to:
     - Understand system context and architecture
-    - Gather static analysis signals via the run_static_analysis tool
+    - Read structured static-analysis findings (taxonomy + hypotheses)
     - Identify optimization opportunities with evidence
     - Prioritize by impact and confidence
     - Flag risks and analysis gaps
 
     Args:
-        state: Pipeline state containing summary_text and code_path
+        state: Pipeline state containing summary_text, static_analysis_report,
+            and code_path
 
     Returns:
         Dictionary with analysis_report (JSON string)
     """
-    logger.info("PHASE 2: Running AnalyzerAgent")
+    logger.info("PHASE 3: Running AnalyzerAgent")
     agent = AnalyzerAgent()
 
     with tempfile.TemporaryDirectory(prefix="analysis_inputs_") as temp_dir:
         temp_path = Path(temp_dir)
         summary_path = temp_path / "summary.txt"
+        static_path = temp_path / "static_analysis_report.json"
 
-        # Write summary to temporary file
+        # Write summary and static analysis report to temporary files
         summary_path.write_text(state.get("summary_text", ""), encoding="utf-8")
+        static_path.write_text(
+            state.get("static_analysis_report", ""), encoding="utf-8"
+        )
 
-        logger.info("PHASE 2: Analyzer input files created")
+        logger.info("PHASE 3: Analyzer input files created")
 
         # Create payload with file paths for the agent to read
         payload = {
             "summary_source": str(summary_path),
+            "static_analysis_source": str(static_path),
             "root_path": state["code_path"],
         }
 
         result = await agent.run(json.dumps(payload))
-        logger.info("PHASE 2: Analysis complete")
+        logger.info("PHASE 3: Analysis complete")
 
     return {"analysis_report": result}
 
@@ -344,6 +390,7 @@ def build_complete_pipeline() -> CompiledStateGraph:
     # Map phase names to node functions
     node_functions = {
         "summarization": summary_node,
+        "static_analysis": static_analysis_node,
         "analysis": analyze_node,
         "optimization": optimize_node,
         "correctness_check": correctness_check_node,
