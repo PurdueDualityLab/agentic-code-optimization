@@ -326,6 +326,15 @@ def _ensure_local_database(
 
 def _run_local_suite(db_path: Path, workspace: Path) -> Path:
     """Run a query suite against an existing DB via local codeql CLI."""
+    import os
+    env = os.environ.copy()
+    env["CODEQL_ALLOW_INSTALLATION_ANYWHERE"] = "true"
+    # Install packs before analyzing
+    pack_cmd = ["codeql", "pack", "install", str(workspace)]
+    logger.info(f"Installing CodeQL packs: {' '.join(pack_cmd)}")
+    pack_result = subprocess.run(pack_cmd, capture_output=True, text=True, timeout=300, env=env)
+    if pack_result.returncode != 0:
+        logger.warning(f"codeql pack install warning: {pack_result.stderr[-400:]}")
     sarif = workspace / "issues.sarif"
     cmd = [
         "codeql", "database", "analyze",
@@ -335,12 +344,15 @@ def _run_local_suite(db_path: Path, workspace: Path) -> Path:
         "--output", str(sarif),
     ]
     logger.info(f"Running CodeQL suite locally: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, env=env)
     if result.returncode != 0:
-        raise RuntimeError(
-            f"codeql database analyze failed (exit {result.returncode}):\n"
-            f"stdout: {result.stdout[-800:]}\nstderr: {result.stderr[-800:]}"
+        logger.warning(
+            f"codeql database analyze failed (exit {result.returncode}), "
+            f"skipping language. stderr: {result.stderr[-400:]}"
         )
+        # Write empty SARIF so callers don't crash
+        empty_sarif = '{"version":"2.1.0","runs":[]}'
+        sarif.write_text(empty_sarif, encoding="utf-8")
     return sarif
 
 

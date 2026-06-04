@@ -28,11 +28,11 @@ predicate isLoggerCall(MethodCall call) {
   call.getMethod().getName().regexpMatch("trace|debug|info|warn|error|fine|finer|finest")
 }
 
-from MethodCall call, AddExpr concat, string serviceName, Method enclosing
+from MethodCall call, AddExpr concatExpr, string serviceName, Method enclosing
 where
   isLoggerCall(call) and
-  concat = call.getAnArgument() and
-  concat.getType() instanceof TypeString and
+  concatExpr = call.getAnArgument() and
+  concatExpr.getType() instanceof TypeString and
   enclosing = call.getEnclosingCallable() and
   enclosing.fromSource() and
   enclosing.getDeclaringType().getPackage().getName().matches("${PACKAGE_LIKE}") and

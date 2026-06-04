@@ -43,3 +43,4 @@ __all__ = [
     "render_taxonomy_query",
     "run_taxonomy_pass",
 ]
+from tools.codeql.legacy import teastore_behavior_analysis, teastore_component_analysis

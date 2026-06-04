@@ -90,11 +90,11 @@ def render_qlpack(language: str) -> str:
     adapter = get_adapter(language)
     if adapter is None:
         raise TemplateRenderError(f"Unknown language: {language}")
-    deps = "\n".join(f"  - {d}" for d in adapter.qlpack_dependencies)
+    deps = "\n".join(f"  {d}: \"*\"" for d in adapter.qlpack_dependencies)
     name_safe = language
     return f"""name: aco/{name_safe}-analysis
 version: 0.0.1
-libraryPathDependencies:
+dependencies:
 {deps}
 """
 
